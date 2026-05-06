@@ -25,13 +25,20 @@ class BestellungWorkflow
     {
         $this->ensureStatus($bestellung, [BestellungStatus::Entwurf]);
 
+        // Prüfen ob der User in dieser Betragsklasse bestellen darf
+        if (! $this->wertgrenzen->darfBestellen($user, (float) $bestellung->gesamtbetrag)) {
+            throw new WorkflowException(
+                'Sie sind nicht berechtigt, in dieser Betragsklasse zu bestellen.',
+            );
+        }
+
         if (! $this->angebotsregeln->istFreigabeReady($bestellung)) {
             throw new WorkflowException('Es fehlen erforderliche Vergleichsangebote oder eine Begründung.');
         }
 
         if (! $bestellung->freigeber_id) {
             $erstFreigeber = $this->wertgrenzen
-                ->freigeberFuerBestellung($bestellung)
+                ->freigeber1FuerBestellung($bestellung)
                 ->first();
 
             if ($erstFreigeber) {
@@ -40,7 +47,10 @@ class BestellungWorkflow
             }
         }
 
-        if (! $bestellung->freigeber_id) {
+        // Wenn kein Freigeber nötig (z. B. Stufe a mit direkt-berechtigter Rolle) ist das ok
+        // Wenn jedoch ein Freigeber erwartet wird (Pool nicht leer war, aber keiner gesetzt) → Exception
+        $pool = $this->wertgrenzen->freigeber1FuerBestellung($bestellung);
+        if (! $bestellung->freigeber_id && $pool->isNotEmpty()) {
             throw new WorkflowException(
                 'Die Bestellung kann nicht eingereicht werden: Für den Betrag ist kein Freigeber in den Wertgrenzen konfiguriert.',
             );
@@ -75,6 +85,16 @@ class BestellungWorkflow
                 && $this->wertgrenzen->zweiteFreigabeNoetig((float) $bestellung->gesamtbetrag)
             ) {
                 $this->transition($bestellung, $user, BestellungStatus::ZurZweitenFreigabe, AktionTyp::ErstFreigegeben, $nachricht);
+
+                // Freigeber 2 automatisch zuweisen
+                $freigeber2 = $this->wertgrenzen->freigeber2FuerBestellung($bestellung)->first();
+                if ($freigeber2) {
+                    $bestellung->freigeber_id = $freigeber2->getKey();
+                    $bestellung->save();
+                } else {
+                    $bestellung->freigeber_id = null;
+                    $bestellung->save();
+                }
 
                 return $bestellung->refresh();
             }

@@ -169,9 +169,19 @@ class Erstellen extends Component
 
     public function freigeberHinweis(): ?string
     {
-        $stufe = app(WertgrenzenService::class)->stufeFuerBetrag($this->gesamtbetrag());
+        $wertgrenzen = app(WertgrenzenService::class);
+        $betrag = $this->gesamtbetrag();
+        $stufe = $wertgrenzen->stufeFuerBetrag($betrag);
+
         if (! $stufe) {
             return 'Keine passende Freigabestufe definiert. Bitte Admin kontaktieren.';
+        }
+
+        if (! $wertgrenzen->darfBestellen(Auth::user(), $betrag)) {
+            return sprintf(
+                'Stufe "%s" – Sie sind nicht berechtigt, in dieser Betragsklasse zu bestellen.',
+                $stufe->bezeichnung,
+            );
         }
 
         return sprintf(
@@ -180,7 +190,7 @@ class Erstellen extends Component
             $stufe->bisBetrag === null
                 ? 'unbegrenzt'
                 : 'bis '.number_format($stufe->bisBetrag, 2, ',', '.').' €',
-            app(WertgrenzenService::class)->zweiteFreigabeNoetig($this->gesamtbetrag())
+            $wertgrenzen->zweiteFreigabeNoetig($betrag)
                 ? ' · zweite Freigabe erforderlich'
                 : '',
         );
@@ -189,6 +199,20 @@ class Erstellen extends Component
     public function addPosition(): void
     {
         $this->positionen[] = $this->emptyPosition(count($this->positionen) + 1);
+        $this->positionPdfs[] = null;
+    }
+
+    public function addPdfPosition(): void
+    {
+        $position = $this->emptyPosition(count($this->positionen) + 1);
+        $position['pdf_position'] = true;
+        $position['bezeichnung'] = 'Siehe PDF-Anlage';
+        $position['menge'] = 1;
+        $position['einheit'] = 'Pos';
+        $position['art_nr'] = null;
+        $position['oberbegriff'] = null;
+
+        $this->positionen[] = $position;
         $this->positionPdfs[] = null;
     }
 
@@ -242,7 +266,7 @@ class Erstellen extends Component
 
     public function isPdfPosition(int $idx): bool
     {
-        return ! empty($this->positionPdfs[$idx]);
+        return (bool) ($this->positionen[$idx]['pdf_position'] ?? false) || ! empty($this->positionPdfs[$idx]);
     }
 
     public function positionPdfPreviewUrl(int $idx): ?string
@@ -264,9 +288,26 @@ class Erstellen extends Component
         $this->normalizePdfPositionen();
         $this->validate();
 
+        foreach ($this->positionen as $idx => $position) {
+            if (($position['pdf_position'] ?? false) && empty($this->positionPdfs[$idx])) {
+                $this->addError('positionPdfs.'.$idx, 'Bitte wählen Sie für die PDF-Position eine PDF-Datei aus.');
+            }
+        }
+
+        if ($this->getErrorBag()->isNotEmpty()) {
+            return;
+        }
+
         $service = app(WertgrenzenService::class);
         $regelService = app(AngebotsregelService::class);
         $workflow = app(BestellungWorkflow::class);
+
+        // Frühzeitig prüfen ob der User in dieser Betragsklasse bestellen darf
+        if (! $service->darfBestellen(Auth::user(), $this->gesamtbetrag())) {
+            $this->addError('gesamtbetrag', 'Sie sind nicht berechtigt, in dieser Betragsklasse zu bestellen.');
+
+            return;
+        }
 
         $bestellung = DB::transaction(function () use ($service, $regelService, $workflow): Bestellung {
             $nummer = app(BenNumberService::class)->next(Auth::user(), $this->haushaltsjahr);
@@ -314,7 +355,7 @@ class Erstellen extends Component
 
             $stufe = $service->stufeFuerBetrag((float) $bestellung->gesamtbetrag);
             if ($stufe) {
-                $erstFreigeber = $service->freigeberFuerBestellung($bestellung)->first();
+                $erstFreigeber = $service->freigeber1FuerBestellung($bestellung)->first();
                 if ($erstFreigeber) {
                     $bestellung->freigeber_id = $erstFreigeber->getKey();
                     $bestellung->save();
@@ -331,7 +372,7 @@ class Erstellen extends Component
 
             Flux::toast(
                 heading: 'Bestellung eingereicht',
-                text: 'BEN '.$bestellung->nummer.' wurde zur Freigabe weitergeleitet.',
+                text: 'Bestellnummer '.$bestellung->nummer.' wurde zur Freigabe weitergeleitet.',
                 variant: 'success',
             );
         } catch (\Throwable $e) {
@@ -421,6 +462,7 @@ class Erstellen extends Component
     {
         return [
             'nr' => $nr,
+            'pdf_position' => false,
             'art_id' => null,
             'art_nr' => null,
             'oberbegriff' => null,

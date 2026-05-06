@@ -9,7 +9,6 @@ use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -19,7 +18,7 @@ use Livewire\Component;
 class Index extends Component
 {
     #[Computed]
-    public function meineBestellungen(): Collection
+    public function meineBestellungen(): \Illuminate\Database\Eloquent\Collection
     {
         return Bestellung::query()
             ->with(['user', 'freigeber'])
@@ -30,7 +29,7 @@ class Index extends Component
     }
 
     #[Computed]
-    public function offeneFreigaben(): Collection
+    public function offeneFreigaben(): \Illuminate\Database\Eloquent\Collection
     {
         $service = app(WertgrenzenService::class);
 

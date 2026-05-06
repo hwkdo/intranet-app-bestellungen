@@ -227,7 +227,7 @@ class Detail extends Component
 
         Flux::toast(
             heading: 'Bestellung dupliziert',
-            text: 'BEN '.$neu->nummer.' wurde aus '.$alt->nummer.' erzeugt.',
+            text: 'Bestellnummer '.$neu->nummer.' wurde aus '.$alt->nummer.' erzeugt.',
             variant: 'success',
         );
 
@@ -326,8 +326,12 @@ class Detail extends Component
             return [$this->bestellung->freigeber->name];
         }
 
-        return app(WertgrenzenService::class)
-            ->freigeberFuerBestellung($this->bestellung)
+        $service = app(WertgrenzenService::class);
+        $pool = $this->bestellung->status === \Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus::ZurZweitenFreigabe
+            ? $service->freigeber2FuerBestellung($this->bestellung)
+            : $service->freigeber1FuerBestellung($this->bestellung);
+
+        return $pool
             ->map(fn (User $user): string => $user->name)
             ->values()
             ->all();

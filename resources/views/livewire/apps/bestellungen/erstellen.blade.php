@@ -107,7 +107,10 @@
             <flux:card>
                 <div class="flex items-center justify-between mb-4">
                     <flux:heading size="lg">Positionen</flux:heading>
-                    <flux:button type="button" size="sm" icon="plus" wire:click="addPosition">Position hinzufügen</flux:button>
+                    <div class="flex items-center gap-2">
+                        <flux:button type="button" size="sm" icon="plus" wire:click="addPosition">Position hinzufügen</flux:button>
+                        <flux:button type="button" size="sm" icon="document-text" wire:click="addPdfPosition">PDF-Position</flux:button>
+                    </div>
                 </div>
 
                 <div class="overflow-x-auto">
@@ -121,7 +124,7 @@
                                 <th class="py-2 px-2 text-left w-20">Einh.</th>
                                 <th class="py-2 px-2 text-right w-28">Einzelpreis</th>
                                 <th class="py-2 px-2 text-right w-28">Gesamt</th>
-                                <th class="py-2 px-2 text-left w-44">PDF</th>
+                                <th class="py-2 px-2 text-left w-44">Anlage</th>
                                 <th class="py-2 pl-2 w-10"></th>
                             </tr>
                         </thead>
@@ -214,23 +217,27 @@
                                         @endif
                                     </td>
                                     <td class="py-2 px-2">
-                                        <input
-                                            type="file"
-                                            wire:model="positionPdfs.{{ $idx }}"
-                                            accept="application/pdf,.pdf"
-                                            class="block w-full text-xs text-zinc-600 dark:text-zinc-300 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-100 file:text-xs hover:file:bg-zinc-200 dark:file:bg-zinc-700 dark:hover:file:bg-zinc-600"
-                                        />
-                                        @error('positionPdfs.'.$idx)
-                                            <p class="text-xs text-red-500 mt-1">{{ $message }}</p>
-                                        @enderror
+                                        @if ($isPdfPosition)
+                                            <input
+                                                type="file"
+                                                wire:model="positionPdfs.{{ $idx }}"
+                                                accept="application/pdf,.pdf"
+                                                class="block w-full text-xs text-zinc-600 dark:text-zinc-300 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-100 file:text-xs hover:file:bg-zinc-200 dark:file:bg-zinc-700 dark:hover:file:bg-zinc-600"
+                                            />
+                                            @error('positionPdfs.'.$idx)
+                                                <p class="text-xs text-red-500 mt-1">{{ $message }}</p>
+                                            @enderror
 
-                                        @if (! empty($positionPdfs[$idx]))
-                                            <div class="mt-1 flex items-center gap-2 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
-                                                <flux:icon name="document-text" class="size-4 shrink-0 text-sky-500" />
-                                                <span class="truncate" title="{{ $positionPdfs[$idx]->getClientOriginalName() }}">
-                                                    {{ $positionPdfs[$idx]->getClientOriginalName() }}
-                                                </span>
-                                            </div>
+                                            @if (! empty($positionPdfs[$idx]))
+                                                <div class="mt-1 flex items-center gap-2 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+                                                    <flux:icon name="document-text" class="size-4 shrink-0 text-sky-500" />
+                                                    <span class="truncate" title="{{ $positionPdfs[$idx]->getClientOriginalName() }}">
+                                                        {{ $positionPdfs[$idx]->getClientOriginalName() }}
+                                                    </span>
+                                                </div>
+                                            @endif
+                                        @else
+                                            <span class="text-zinc-400 text-xs">—</span>
                                         @endif
                                     </td>
                                     <td class="py-2 pl-2 text-right">

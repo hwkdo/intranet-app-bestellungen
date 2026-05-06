@@ -6,7 +6,7 @@
                 <flux:tab name="angebote" icon="check-badge">Angebotsregeln</flux:tab>
                 <flux:tab name="arten" icon="rectangle-stack">Bestell-Arten</flux:tab>
                 <flux:tab name="anlagen" icon="paper-clip">Anlagen</flux:tab>
-                <flux:tab name="stammdaten" icon="database">Stammdaten</flux:tab>
+                <flux:tab name="stammdaten" icon="circle-stack">Stammdaten</flux:tab>
                 <flux:tab name="monitoring" icon="eye">Monitoring</flux:tab>
                 <flux:tab name="settings" icon="cog-6-tooth">Allgemeine Einstellungen</flux:tab>
             </flux:tabs>

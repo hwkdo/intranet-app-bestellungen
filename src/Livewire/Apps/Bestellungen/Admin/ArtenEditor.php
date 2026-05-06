@@ -7,7 +7,6 @@ namespace Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Admin;
 use Flux\Flux;
 use Hwkdo\IntranetAppBestellungen\Models\Art;
 use Illuminate\Contracts\View\View;
-use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
@@ -24,7 +23,7 @@ class ArtenEditor extends Component
     public int $sortierung = 0;
 
     #[Computed]
-    public function arten(): Collection
+    public function arten(): \Illuminate\Database\Eloquent\Collection
     {
         return Art::query()->orderBy('sortierung')->orderBy('bezeichnung')->get();
     }

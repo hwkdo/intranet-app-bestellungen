@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Admin;
 
 use Flux\Flux;
-use Hwkdo\D3RestLaravel\Facades\D3RestLaravel;
 use Hwkdo\IntranetAppBestellungen\Jobs\PushBestellscheinToD3Job;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Services\D3\BestellscheinD3Service;
@@ -46,7 +45,7 @@ class Monitoring extends Component
             return;
         }
         try {
-            D3RestLaravel::quasiDeleteDoc($bestellung->d3id);
+            \Hwkdo\D3RestLaravel\Facades\D3RestLaravel::quasiDeleteDoc($bestellung->d3id);
             $bestellung->forceFill(['d3id' => null, 'd3_pushed_at' => null])->save();
             Flux::toast(heading: 'D3-Eintrag quasi-gelöscht', variant: 'success');
         } catch (\Throwable $e) {

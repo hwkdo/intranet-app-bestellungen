@@ -2,7 +2,7 @@
     <flux:card>
         <flux:heading size="lg" class="mb-3">D3-Suche</flux:heading>
         <div class="flex gap-3">
-            <flux:input wire:model="d3SearchQuery" placeholder="BEN-Nummer oder Bestellungs-ID" class="flex-1" />
+            <flux:input wire:model="d3SearchQuery" placeholder="Bestellnummer oder Bestellungs-ID" class="flex-1" />
             <flux:button icon="magnifying-glass" wire:click="d3Search">Suchen</flux:button>
         </div>
         @if ($d3SearchResults !== null)
@@ -24,7 +24,7 @@
     <flux:card>
         <div class="flex items-center justify-between mb-3">
             <flux:heading size="lg">Bestellungen-Monitoring</flux:heading>
-            <flux:input wire:model.live.debounce.300ms="search" placeholder="BEN, Lieferant oder D3-ID…" class="w-72" icon="magnifying-glass" />
+            <flux:input wire:model.live.debounce.300ms="search" placeholder="Bestellnummer, Lieferant oder D3-ID…" class="w-72" icon="magnifying-glass" />
         </div>
 
         <flux:table>

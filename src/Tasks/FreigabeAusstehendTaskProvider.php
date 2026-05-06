@@ -42,7 +42,7 @@ class FreigabeAusstehendTaskProvider implements TaskProviderInterface
             ->get()
             ->filter(fn (Bestellung $b): bool => $this->wertgrenzen->darfFreigeben($user, $b))
             ->map(fn (Bestellung $b): TaskItem => new TaskItem(
-                title: 'BEN '.$b->nummer.' – '.($b->lieferantenname ?? 'Bestellung'),
+                title: $b->nummer.' – '.($b->lieferantenname ?? 'Bestellung'),
                 url: route('apps.bestellungen.detail', ['bestellung' => $b, 'aktion' => 'freigeben']),
                 appIdentifier: IntranetAppBestellungen::identifier(),
                 appName: IntranetAppBestellungen::app_name(),

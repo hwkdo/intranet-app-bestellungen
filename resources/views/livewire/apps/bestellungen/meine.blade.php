@@ -3,7 +3,7 @@
         <div class="flex flex-wrap items-center gap-3 mb-4">
             <flux:input
                 wire:model.live.debounce.300ms="search"
-                placeholder="BEN-Nr., Lieferant oder Betreff…"
+                placeholder="Bestellnummer, Lieferant oder Betreff…"
                 icon="magnifying-glass"
                 class="flex-1 min-w-[220px]"
             />

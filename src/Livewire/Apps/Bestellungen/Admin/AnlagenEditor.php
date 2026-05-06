@@ -8,7 +8,6 @@ use Flux\Flux;
 use Hwkdo\IntranetAppBestellungen\Models\Anlage;
 use Hwkdo\IntranetAppBestellungen\Models\Art;
 use Illuminate\Contracts\View\View;
-use Illuminate\Database\Eloquent\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 
@@ -25,13 +24,13 @@ class AnlagenEditor extends Component
     public bool $aktiv = true;
 
     #[Computed]
-    public function anlagen(): Collection
+    public function anlagen(): \Illuminate\Database\Eloquent\Collection
     {
         return Anlage::query()->with('art')->orderBy('bezeichnung')->get();
     }
 
     #[Computed]
-    public function arten(): Collection
+    public function arten(): \Illuminate\Database\Eloquent\Collection
     {
         return Art::query()->orderBy('bezeichnung')->get();
     }

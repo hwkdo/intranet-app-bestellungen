@@ -6,9 +6,6 @@ namespace Hwkdo\IntranetAppBestellungen;
 
 use Hwkdo\IntranetAppBase\Interfaces\IntranetAppInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
-use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
-use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
-use Hwkdo\IntranetAppBestellungen\Data\UserSettings;
 use Hwkdo\IntranetAppBestellungen\Tasks\FreigabeAusstehendTaskProvider;
 use Illuminate\Support\Collection;
 
@@ -41,12 +38,12 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesTasksInte
 
     public static function userSettingsClass(): ?string
     {
-        return UserSettings::class;
+        return \Hwkdo\IntranetAppBestellungen\Data\UserSettings::class;
     }
 
     public static function appSettingsClass(): ?string
     {
-        return AppSettings::class;
+        return \Hwkdo\IntranetAppBestellungen\Data\AppSettings::class;
     }
 
     public static function mcpServers(): array
@@ -55,7 +52,7 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesTasksInte
     }
 
     /**
-     * @return array<class-string<TaskProviderInterface>>
+     * @return array<class-string<\Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface>>
      */
     public static function taskProviders(): array
     {

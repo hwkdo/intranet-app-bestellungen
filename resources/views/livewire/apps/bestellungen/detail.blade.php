@@ -10,7 +10,7 @@
                         <flux:badge :color="$bestellung->status?->color()">
                             {{ $bestellung->status?->label() }}
                         </flux:badge>
-                        <flux:text class="text-zinc-500">BEN {{ $bestellung->nummer }}</flux:text>
+                        <flux:text class="text-zinc-500">{{ $bestellung->nummer }}</flux:text>
                         @if ($bestellung->istInD3())
                             <flux:badge color="sky" icon="cloud">in D3</flux:badge>
                         @endif
@@ -260,7 +260,7 @@
                     @if ($bestellung->wiederholt_von_id)
                         <div>
                             <dt class="text-zinc-500">Erstellt aus Vorlage</dt>
-                            <dd>BEN {{ optional($bestellung->vorlage)->nummer }}</dd>
+                            <dd>{{ optional($bestellung->vorlage)->nummer }}</dd>
                         </div>
                     @endif
                 </dl>
@@ -295,7 +295,7 @@
         <flux:modal name="freigeben-modal" :show="false">
             <form wire:submit="freigeben" class="space-y-4">
                 <flux:heading size="lg">Bestellung freigeben</flux:heading>
-                <flux:text>BEN {{ $bestellung->nummer }} – {{ number_format((float) $bestellung->gesamtbetrag, 2, ',', '.') }} €</flux:text>
+                <flux:text>{{ $bestellung->nummer }} – {{ number_format((float) $bestellung->gesamtbetrag, 2, ',', '.') }} €</flux:text>
                 <flux:textarea wire:model="freigabeNachricht" label="Optionale Nachricht" rows="2" />
                 <div class="flex justify-end gap-2">
                     <flux:modal.close>
