@@ -71,14 +71,14 @@ class ArtenEditor extends Component
         );
 
         Flux::modal('art-modal')->close();
-        Flux::toast(heading: 'Art gespeichert', variant: 'success');
+        Flux::toast(heading: 'Art gespeichert', text: 'Die Art wurde erfolgreich gespeichert.', variant: 'success');
         unset($this->arten);
     }
 
     public function loeschen(int $id): void
     {
         Art::query()->whereKey($id)->delete();
-        Flux::toast(heading: 'Art gelöscht', variant: 'success');
+        Flux::toast(heading: 'Art gelöscht', text: 'Die Art wurde erfolgreich gelöscht.', variant: 'success');
         unset($this->arten);
     }
 

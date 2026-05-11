@@ -125,6 +125,97 @@ class WertgrenzenService
             ->values();
     }
 
+    public function darfFreigeber1AutomatischZugewiesenWerden(Bestellung $bestellung): bool
+    {
+        $stufe = $this->stufeFuerBetrag((float) $bestellung->gesamtbetrag);
+        if (! $stufe) {
+            return false;
+        }
+
+        $user = $bestellung->user;
+        if (! $user) {
+            return false;
+        }
+
+        $zutreffendeRegeln = $this->zutreffendeFreigabeRegeln($user, $stufe->freigabe1RegelObjekte());
+        if ($zutreffendeRegeln === []) {
+            return false;
+        }
+
+        foreach ($zutreffendeRegeln as $regel) {
+            if ($regel->keinFreigeber || $regel->quelleTyp !== 'single') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function istFreigeber1NichtNoetig(Bestellung $bestellung): bool
+    {
+        $stufe = $this->stufeFuerBetrag((float) $bestellung->gesamtbetrag);
+        if (! $stufe) {
+            return false;
+        }
+
+        $user = $bestellung->user;
+        if (! $user) {
+            return false;
+        }
+
+        $freigeber = collect();
+
+        foreach ($stufe->freigabe1RegelObjekte() as $regel) {
+            if ($regel->typ === 'if_attribute') {
+                $attribut = $regel->bedingung;
+                if ($attribut && $user->{$attribut}) {
+                    if ($regel->keinFreigeber) {
+                        return true;
+                    }
+
+                    $freigeber = $freigeber->merge($this->resolveQuelle($user, $regel->quelleTyp, $regel->quelle));
+                }
+
+                continue;
+            }
+
+            if ($regel->typ === 'if_rolle') {
+                $rolle = $regel->bedingung;
+                if ($rolle && $user->hasRole($rolle)) {
+                    if ($regel->keinFreigeber) {
+                        return true;
+                    }
+
+                    $freigeber = $freigeber->merge($this->resolveQuelle($user, $regel->quelleTyp, $regel->quelle));
+                }
+
+                continue;
+            }
+
+            if ($regel->typ === 'default') {
+                $skipDefault = false;
+                foreach ($regel->excludeAttribute as $attr) {
+                    if ($user->{$attr}) {
+                        $skipDefault = true;
+                        break;
+                    }
+                }
+
+                if ($skipDefault) {
+                    continue;
+                }
+
+                if ($regel->keinFreigeber) {
+                    return $freigeber->isEmpty();
+                }
+
+                $freigeber = $freigeber->merge($this->resolveQuelle($user, $regel->quelleTyp, $regel->quelle));
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Liefert alle möglichen Freigeber 2 für eine Bestellung.
      *
@@ -219,6 +310,51 @@ class WertgrenzenService
         }
 
         return $freigeber;
+    }
+
+    /**
+     * @param  array<int, FreigebeRegel>  $regeln
+     * @return array<int, FreigebeRegel>
+     */
+    private function zutreffendeFreigabeRegeln(User $user, array $regeln): array
+    {
+        $zutreffend = [];
+
+        foreach ($regeln as $regel) {
+            if ($regel->typ === 'if_attribute') {
+                $attribut = $regel->bedingung;
+                if ($attribut && $user->{$attribut}) {
+                    $zutreffend[] = $regel;
+                }
+
+                continue;
+            }
+
+            if ($regel->typ === 'if_rolle') {
+                $rolle = $regel->bedingung;
+                if ($rolle && $user->hasRole($rolle)) {
+                    $zutreffend[] = $regel;
+                }
+
+                continue;
+            }
+
+            if ($regel->typ === 'default') {
+                $skipDefault = false;
+                foreach ($regel->excludeAttribute as $attr) {
+                    if ($user->{$attr}) {
+                        $skipDefault = true;
+                        break;
+                    }
+                }
+
+                if (! $skipDefault) {
+                    $zutreffend[] = $regel;
+                }
+            }
+        }
+
+        return $zutreffend;
     }
 
     /**

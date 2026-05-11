@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppBestellungen\Services\D3;
 
+use App\Models\User;
 use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
 use Hwkdo\D3RestLaravel\Facades\D3RestLaravel;
 use Hwkdo\D3RestLaravel\models\Bestellschein;
@@ -24,19 +25,18 @@ class BestellscheinD3Service
     /**
      * Pusht einen frisch erzeugten Bestellschein nach D3.
      */
-    public function push(Bestellung $bestellung): ?string
+    public function push(Bestellung $bestellung, ?User $actor = null): ?string
     {
         $bestellung->loadMissing(['positionen', 'user', 'notizen']);
 
         $pdfPath = $this->pdfService->buildFile($bestellung);
 
         $dokument = new Bestellschein([
-            'nummer' => (int) preg_replace('/\D+/', '', $bestellung->nummer) ?: 0,
+            'nummer' => (int) $bestellung->nummer,
             'lieferantenName' => (string) $bestellung->lieferantenname,
             'lieferantenSuchfeld' => (string) $bestellung->lieferantennummer,
             'lieferantenPlz' => (string) ($bestellung->lieferanschrift['plz'] ?? ''),
             'lieferantenOrt' => (string) ($bestellung->lieferanschrift['ort'] ?? ''),
-            'lieferantenAuswahl' => (string) $bestellung->lieferantenname,
             'kostenstelle' => (int) $bestellung->kostenstelle,
             'haushaltsjahr' => (int) $bestellung->haushaltsjahr,
             'erfassungsdatum' => optional($bestellung->created_at)->format('Y-m-d'),
@@ -64,7 +64,7 @@ class BestellscheinD3Service
         $bestellung->save();
 
         $bestellung->aktionen()->create([
-            'user_id' => null,
+            'user_id' => $actor?->getKey(),
             'typ' => AktionTyp::D3Push->value,
             'von_status' => $bestellung->status?->value,
             'nach_status' => $bestellung->status?->value,
@@ -81,7 +81,7 @@ class BestellscheinD3Service
     /**
      * Re-Push: alten Eintrag „quasi-löschen", neu pushen.
      */
-    public function rePush(Bestellung $bestellung): ?string
+    public function rePush(Bestellung $bestellung, ?User $actor = null): ?string
     {
         $oldD3Id = $bestellung->d3id;
 
@@ -97,11 +97,11 @@ class BestellscheinD3Service
             }
         }
 
-        $newId = $this->push($bestellung);
+        $newId = $this->push($bestellung, $actor);
 
         if ($newId) {
             $bestellung->aktionen()->create([
-                'user_id' => null,
+                'user_id' => $actor?->getKey(),
                 'typ' => AktionTyp::D3RePush->value,
                 'von_status' => $bestellung->status?->value,
                 'nach_status' => $bestellung->status?->value,
@@ -161,10 +161,54 @@ class BestellscheinD3Service
      */
     private function resolveBenutzer(Bestellung $bestellung): array
     {
-        return collect([
-            optional($bestellung->user)->name,
-            optional($bestellung->besteller)->name,
-        ])->filter()->unique()->values()->all();
+        $bestellung->loadMissing(['user', 'besteller', 'freigeber', 'aktionen.user']);
+
+        $werte = collect([
+            $this->d3BenutzerWert($bestellung->user),
+            $this->d3BenutzerWert($bestellung->besteller),
+            $this->d3BenutzerWert($bestellung->freigeber),
+        ]);
+
+        if (! $bestellung->freigeber_id) {
+            $freigegebenDurch = $bestellung->aktionen
+                ->firstWhere('typ', AktionTyp::Freigegeben->value)?->user;
+
+            $werte->push($this->d3BenutzerWert($freigegebenDurch));
+        }
+
+        return $werte
+            ->map(fn ($wert) => is_string($wert) ? trim($wert) : null)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function d3BenutzerWert(?\App\Models\User $user): ?string
+    {
+        if (! $user) {
+            return null;
+        }
+
+        $ldapDisplayName = trim((string) ($user->ldap_displayname ?? ''));
+        if ($ldapDisplayName !== '') {
+            return $ldapDisplayName;
+        }
+
+        $vorname = trim((string) ($user->vorname ?? ''));
+        $nachname = trim((string) ($user->nachname ?? ''));
+        if ($nachname !== '' && $vorname !== '') {
+            return $nachname.', '.$vorname;
+        }
+
+        $name = trim((string) ($user->name ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        $username = trim((string) ($user->username ?? ''));
+
+        return $username !== '' ? $username : null;
     }
 
     /**
@@ -172,14 +216,52 @@ class BestellscheinD3Service
      */
     private function resolveAbteilung(Bestellung $bestellung): array
     {
+        $gruppen = collect($bestellung->gruppen ?? [])
+            ->map(fn ($gruppe) => trim((string) $gruppe))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($gruppen !== []) {
+            return $gruppen;
+        }
+
         $user = $bestellung->user;
         if (! $user) {
             return [];
         }
 
+        try {
+            $ttlSeconds = $this->soapUserGroupsCacheTtlSeconds();
+            $gruppen = D3RestLaravel::getUserInGroupsSoapCached((string) $user->username, $ttlSeconds);
+            if (is_array($gruppen) && $gruppen !== []) {
+                return collect($gruppen)
+                    ->map(fn ($gruppe) => (string) $gruppe)
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('bestellungen.d3_groups_soap.failed', [
+                'bestellung_id' => $bestellung->getKey(),
+                'user_id' => $user->getKey(),
+                'username' => $user->username,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         $abteilung = $user->abteilung ?? null;
 
         return $abteilung ? [(string) $abteilung] : [];
+    }
+
+    private function soapUserGroupsCacheTtlSeconds(): int
+    {
+        $stunden = IntranetAppBestellungenSettings::resolvedAppSettings()->d3SoapUserGroupsCacheTtlStunden;
+
+        return max(1, (int) $stunden) * 3600;
     }
 
     private function log(string $phase, Bestellung $bestellung, array $context = []): void

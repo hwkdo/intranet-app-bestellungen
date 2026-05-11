@@ -28,6 +28,7 @@ class Bestellung extends Model
         return [
             'status' => BestellungStatus::class,
             'kontierung' => 'array',
+            'gruppen' => 'array',
             'lieferanschrift' => 'array',
             'gesamtbetrag' => 'decimal:2',
             'haushaltsjahr' => 'integer',
@@ -75,6 +76,11 @@ class Bestellung extends Model
     public function besteller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'besteller_id');
+    }
+
+    public function lieferanschriftUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'lieferanschrift_user_id');
     }
 
     public function vorlage(): BelongsTo

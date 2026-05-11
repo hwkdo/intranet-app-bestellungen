@@ -1,6 +1,61 @@
-<div>
+<div
+    x-data="{
+        initialTotals: {},
+        rowTotals: {},
+        initRowTotals(positionen) {
+            this.initialTotals = {};
+            this.rowTotals = {};
+            positionen.forEach((pos, idx) => {
+                const total = this.calcRowTotal(pos?.menge, pos?.preis);
+                this.initialTotals[idx] = total;
+                this.rowTotals[idx] = total;
+            });
+        },
+        syncFromWire(positionen) {
+            positionen.forEach((pos, idx) => {
+                if (this.rowTotals[idx] === undefined) {
+                    const total = this.calcRowTotal(pos?.menge, pos?.preis);
+                    this.initialTotals[idx] = total;
+                    this.rowTotals[idx] = total;
+                }
+            });
+        },
+        calcRowTotal(menge, preis) {
+            const m = Number(menge ?? 0);
+            const p = Number(preis ?? 0);
+
+            if (Number.isNaN(m) || Number.isNaN(p)) {
+                return 0;
+            }
+
+            return m * p;
+        },
+        setRowTotal(idx, menge, preis) {
+            this.rowTotals[idx] = this.calcRowTotal(menge, preis);
+        },
+        total() {
+            return Object.values(this.rowTotals).reduce((sum, val) => sum + Number(val || 0), 0);
+        },
+        formatEuro(value) {
+            return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
+        },
+    }"
+    x-init="initRowTotals(@js($positionen))"
+    x-effect="syncFromWire($wire.positionen || [])"
+>
     <x-intranet-app-bestellungen::bestellungen-layout heading="Neue Bestellung" subheading="Bestellschein erfassen und zur Freigabe einreichen">
         <form wire:submit="speichern" class="space-y-6">
+            @if ($errors->any())
+                <flux:callout icon="exclamation-triangle" variant="danger">
+                    <div class="font-medium">Bitte korrigiere die markierten Eingaben.</div>
+                    <ul class="mt-1 list-disc pl-5 text-sm">
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </flux:callout>
+            @endif
+
             <flux:card>
                 <flux:heading size="lg" class="mb-4">Allgemeine Angaben</flux:heading>
 
@@ -79,6 +134,27 @@
                         <flux:error name="kostenstelle" />
                     </flux:field>
 
+                    <flux:field>
+                        <flux:label>Lieferanschrift</flux:label>
+                        <flux:select
+                            variant="listbox"
+                            wire:model="lieferanschriftUserId"
+                            searchable
+                            clearable
+                            placeholder="User auswählen…"
+                        >
+                            @foreach ($this->lieferanschriftUserSuggestions as $u)
+                                <flux:select.option
+                                    wire:key="lieferanschrift-user-{{ $u->id }}"
+                                    value="{{ $u->id }}"
+                                >
+                                    {{ trim(($u->vorname ?? '').' '.($u->nachname ?? '')) }} ({{ $u->username }})
+                                </flux:select.option>
+                            @endforeach
+                        </flux:select>
+                        <flux:error name="lieferanschriftUserId" />
+                    </flux:field>
+
                     <flux:input
                         wire:model="haushaltsjahr"
                         type="number"
@@ -101,6 +177,18 @@
                         rows="3"
                         class="md:col-span-2"
                     />
+
+                    <flux:field class="md:col-span-2">
+                        <flux:label>D3 - Gruppen</flux:label>
+                        <flux:select wire:model="d3GruppenAuswahl" multiple variant="listbox">
+                            @foreach ($d3GruppenOptionen as $gruppe)
+                                <flux:select.option value="{{ $gruppe }}">{{ $gruppe }}</flux:select.option>
+                            @endforeach
+                        </flux:select>
+                        <flux:text class="text-zinc-500 text-sm">Vorauswahl analog Legacy auf Basis der D3-Benutzergruppen.</flux:text>
+                        <flux:error name="d3GruppenAuswahl" />
+                        <flux:error name="d3GruppenAuswahl.*" />
+                    </flux:field>
                 </div>
             </flux:card>
 
@@ -147,9 +235,10 @@
                                         @else
                                             <flux:input
                                                 size="sm"
-                                                wire:model.live="positionen.{{ $idx }}.bezeichnung"
+                                                wire:model.blur="positionen.{{ $idx }}.bezeichnung"
                                                 placeholder="Bezeichnung"
                                             />
+                                            <flux:error name="positionen.{{ $idx }}.bezeichnung" />
                                         @endif
                                     </td>
                                     <td class="py-2 px-2">
@@ -158,9 +247,10 @@
                                         @else
                                             <flux:input
                                                 size="sm"
-                                                wire:model.live="positionen.{{ $idx }}.art_nr"
+                                                wire:model.blur="positionen.{{ $idx }}.art_nr"
                                                 placeholder="Art.-Nr."
                                             />
+                                            <flux:error name="positionen.{{ $idx }}.art_nr" />
                                         @endif
                                     </td>
                                     <td class="py-2 px-2">
@@ -169,11 +259,13 @@
                                         @else
                                             <flux:input
                                                 size="sm"
-                                                wire:model.live="positionen.{{ $idx }}.menge"
+                                                wire:model.live.debounce.300ms="positionen.{{ $idx }}.menge"
+                                                x-on:input="setRowTotal({{ $idx }}, $event.target.value, $wire.positionen?.[{{ $idx }}]?.preis)"
                                                 type="number"
                                                 step="0.01"
                                                 class="text-right"
                                             />
+                                            <flux:error name="positionen.{{ $idx }}.menge" />
                                         @endif
                                     </td>
                                     <td class="py-2 px-2">
@@ -182,9 +274,10 @@
                                         @else
                                             <flux:input
                                                 size="sm"
-                                                wire:model.live="positionen.{{ $idx }}.einheit"
+                                                wire:model.blur="positionen.{{ $idx }}.einheit"
                                                 placeholder="Stk"
                                             />
+                                            <flux:error name="positionen.{{ $idx }}.einheit" />
                                         @endif
                                     </td>
                                     <td class="py-2 px-2">
@@ -193,26 +286,30 @@
                                         @else
                                             <flux:input
                                                 size="sm"
-                                                wire:model.live="positionen.{{ $idx }}.preis"
+                                                wire:model.live.debounce.300ms="positionen.{{ $idx }}.preis"
+                                                x-on:input="setRowTotal({{ $idx }}, $wire.positionen?.[{{ $idx }}]?.menge, $event.target.value)"
                                                 type="number"
                                                 step="0.01"
                                                 class="text-right"
                                             />
+                                            <flux:error name="positionen.{{ $idx }}.preis" />
                                         @endif
                                     </td>
                                     <td class="py-2 px-2">
                                         @if ($isPdfPosition)
                                             <flux:input
                                                 size="sm"
-                                                wire:model.live="positionen.{{ $idx }}.preis"
+                                                wire:model.live.debounce.300ms="positionen.{{ $idx }}.preis"
+                                                x-on:input="setRowTotal({{ $idx }}, 1, $event.target.value)"
                                                 type="number"
                                                 step="0.01"
                                                 placeholder="Gesamtpreis"
                                                 class="text-right"
                                             />
+                                            <flux:error name="positionen.{{ $idx }}.preis" />
                                         @else
                                             <div class="text-right tabular-nums py-1.5">
-                                                {{ number_format($zeilenSumme, 2, ',', '.') }} €
+                                                <span x-text="formatEuro((rowTotals[{{ $idx }}] ?? initialTotals[{{ $idx }}] ?? {{ $zeilenSumme }}))"></span> €
                                             </div>
                                         @endif
                                     </td>
@@ -259,7 +356,7 @@
 
                 <div class="mt-4 text-right">
                     <flux:heading size="md">
-                        Gesamt: <span class="text-emerald-600">{{ number_format($this->gesamtbetrag(), 2, ',', '.') }} €</span>
+                        Gesamt: <span class="text-emerald-600"><span x-text="formatEuro(total())"></span> €</span>
                     </flux:heading>
                 </div>
             </flux:card>
@@ -364,8 +461,18 @@
                 <flux:button type="button" variant="ghost" :href="route('apps.bestellungen.index')" wire:navigate>
                     Abbrechen
                 </flux:button>
-                <flux:button type="submit" variant="primary" icon="paper-airplane">
-                    Bestellung einreichen
+                <flux:button
+                    type="submit"
+                    variant="primary"
+                    icon="paper-airplane"
+                    wire:loading.attr="disabled"
+                    wire:target="speichern"
+                >
+                    <span wire:loading.remove wire:target="speichern">Bestellung einreichen</span>
+                    <span wire:loading wire:target="speichern" class="inline-flex items-center gap-2">
+                        <flux:icon name="arrow-path" class="size-4 animate-spin" />
+                        Wird eingereicht...
+                    </span>
                 </flux:button>
             </div>
         </form>

@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen;
 
+use App\Models\User;
 use Flux\Flux;
+use Hwkdo\D3RestLaravel\Facades\D3RestLaravel;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Models\Art;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
+use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
 use Hwkdo\IntranetAppBestellungen\Models\KostenstelleCache;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
@@ -21,6 +24,8 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -31,11 +36,15 @@ class Erstellen extends Component
 {
     use WithFileUploads;
 
+    private const HINWEIS_FREIGEBER_AUSWAHL = 'Es konnte kein eindeutiger Freigeber ermittel werden. Bitte Freigeber auswählen';
+
     public ?string $lieferantennummer = null;
 
     public ?string $lieferantenname = null;
 
     public ?string $kostenstelle = null;
+
+    public ?int $lieferanschriftUserId = null;
 
     public int $haushaltsjahr;
 
@@ -51,6 +60,12 @@ class Erstellen extends Component
 
     /** @var array<int, mixed> */
     public array $positionPdfs = [];
+
+    /** @var array<int, string> */
+    public array $d3GruppenAuswahl = [];
+
+    /** @var array<int, string> */
+    public array $d3GruppenOptionen = [];
 
     public string $lieferantSearch = '';
 
@@ -73,6 +88,9 @@ class Erstellen extends Component
         $this->kontierung = [
             $this->emptyKontierung(),
         ];
+        $this->lieferanschriftUserId = Auth::id();
+
+        $this->loadD3GruppenAuswahl();
     }
 
     public function rules(): array
@@ -80,6 +98,11 @@ class Erstellen extends Component
         return [
             'lieferantenname' => ['required', 'string', 'max:255'],
             'kostenstelle' => ['required', 'string', 'max:50'],
+            'lieferanschriftUserId' => [
+                'required',
+                'integer',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->where('active', true)),
+            ],
             'haushaltsjahr' => ['required', 'integer', 'min:2000', 'max:2100'],
             'betreff' => ['nullable', 'string', 'max:255'],
             'begruendung' => ['nullable', 'string'],
@@ -92,6 +115,8 @@ class Erstellen extends Component
             'positionen.*.art_nr' => ['nullable', 'string', 'max:100'],
             'positionPdfs' => ['array'],
             'positionPdfs.*' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+            'd3GruppenAuswahl' => ['required', 'array', 'min:1'],
+            'd3GruppenAuswahl.*' => ['required', 'string', 'max:255'],
             'kontierung' => ['array'],
             'kontierung.*.kostenstelle' => ['nullable', 'string', 'max:50'],
             'kontierung.*.kursnummer' => ['nullable', 'string', 'max:100'],
@@ -128,6 +153,16 @@ class Erstellen extends Component
     public function kostenstellenSuggestions(): Collection
     {
         return $this->buildKostenstellenQuery($this->kostenstelleSearch, $this->kostenstelle);
+    }
+
+    #[Computed]
+    public function lieferanschriftUserSuggestions(): Collection
+    {
+        return User::query()
+            ->aktiv()
+            ->orderBy('nachname')
+            ->orderBy('vorname')
+            ->get();
     }
 
     /**
@@ -311,6 +346,7 @@ class Erstellen extends Component
 
         $bestellung = DB::transaction(function () use ($service, $regelService, $workflow): Bestellung {
             $nummer = app(BenNumberService::class)->next(Auth::user(), $this->haushaltsjahr);
+            $lieferanschriftUser = User::query()->find($this->lieferanschriftUserId);
 
             $bestellung = Bestellung::create([
                 'nummer' => $nummer,
@@ -322,6 +358,8 @@ class Erstellen extends Component
                 'betreff' => $this->betreff,
                 'begruendung' => $this->begruendung,
                 'kontierung' => $this->normalizeKontierung(),
+                'gruppen' => $this->normalizeD3GruppenAuswahl(),
+                'lieferanschrift_user_id' => $lieferanschriftUser?->getKey(),
                 'user_id' => Auth::id(),
                 'gesamtbetrag' => $this->gesamtbetrag(),
             ]);
@@ -355,9 +393,12 @@ class Erstellen extends Component
 
             $stufe = $service->stufeFuerBetrag((float) $bestellung->gesamtbetrag);
             if ($stufe) {
-                $erstFreigeber = $service->freigeber1FuerBestellung($bestellung)->first();
-                if ($erstFreigeber) {
-                    $bestellung->freigeber_id = $erstFreigeber->getKey();
+                $pool = $service->freigeber1FuerBestellung($bestellung);
+                if (
+                    $service->darfFreigeber1AutomatischZugewiesenWerden($bestellung)
+                    && $pool->count() === 1
+                ) {
+                    $bestellung->freigeber_id = $pool->first()?->getKey();
                     $bestellung->save();
                 }
             }
@@ -376,6 +417,16 @@ class Erstellen extends Component
                 variant: 'success',
             );
         } catch (\Throwable $e) {
+            if ($e->getMessage() === self::HINWEIS_FREIGEBER_AUSWAHL) {
+                $this->redirectRoute('apps.bestellungen.detail', [
+                    'bestellung' => $bestellung,
+                    'aktion' => 'einreichen',
+                    'hinweis' => 'freigeber',
+                ]);
+
+                return;
+            }
+
             Flux::toast(
                 heading: 'Hinweis',
                 text: $e->getMessage(),
@@ -510,5 +561,89 @@ class Erstellen extends Component
         }
 
         return $rows;
+    }
+
+    private function loadD3GruppenAuswahl(): void
+    {
+        $username = (string) (Auth::user()?->username ?? '');
+        if ($username === '') {
+            $this->d3GruppenOptionen = [];
+            $this->d3GruppenAuswahl = [];
+
+            return;
+        }
+
+        $userGroups = [];
+        try {
+            $userGroups = D3RestLaravel::getUserInGroupsSoapCached($username, $this->soapUserGroupsCacheTtlSeconds());
+        } catch (\Throwable $e) {
+            Log::warning('bestellungen.erstellen.d3_groups_user.failed', [
+                'username' => $username,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $allGroups = [];
+        try {
+            $allGroups = D3RestLaravel::getD3GroupsSoapCached($this->soapAllGroupsCacheTtlSeconds());
+        } catch (\Throwable $e) {
+            Log::warning('bestellungen.erstellen.d3_groups_all.failed', [
+                'username' => $username,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $normalizedUserGroups = collect($userGroups)
+            ->map(fn ($group) => trim((string) $group))
+            ->filter(fn (string $group): bool => $group !== '' && str_starts_with($group, '@'))
+            ->values();
+
+        // Legacy-Sonderfall: Bei Dozenten/EDV @Rechnungen zusätzlich vorauswählen.
+        if ($normalizedUserGroups->contains('@Dozenten') || $normalizedUserGroups->contains('@D3EDV')) {
+            $normalizedUserGroups->prepend('@Rechnungen');
+        }
+
+        $normalizedUserGroups = $normalizedUserGroups
+            ->unique()
+            ->values();
+
+        $options = collect($allGroups)
+            ->map(fn ($group) => trim((string) $group))
+            ->filter(fn (string $group): bool => $group !== '' && str_starts_with($group, '@'))
+            ->merge($normalizedUserGroups)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        $this->d3GruppenOptionen = $options;
+        $this->d3GruppenAuswahl = $normalizedUserGroups->values()->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function normalizeD3GruppenAuswahl(): array
+    {
+        return collect($this->d3GruppenAuswahl)
+            ->map(fn ($group) => trim((string) $group))
+            ->filter(fn (string $group): bool => $group !== '' && str_starts_with($group, '@'))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function soapUserGroupsCacheTtlSeconds(): int
+    {
+        $hours = IntranetAppBestellungenSettings::resolvedAppSettings()->d3SoapUserGroupsCacheTtlStunden;
+
+        return max(1, (int) $hours) * 3600;
+    }
+
+    private function soapAllGroupsCacheTtlSeconds(): int
+    {
+        $hours = IntranetAppBestellungenSettings::resolvedAppSettings()->d3SoapAllGroupsCacheTtlStunden;
+
+        return max(1, (int) $hours) * 3600;
     }
 }

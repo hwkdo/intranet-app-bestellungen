@@ -57,7 +57,14 @@
                         </flux:table.cell>
                         <flux:table.cell>
                             @if ($bestellung->d3id)
-                                <flux:badge color="emerald" size="sm">{{ \Illuminate\Support\Str::limit($bestellung->d3id, 12) }}</flux:badge>
+                                <a
+                                    href="{{ app(\Hwkdo\D3RestLaravel\Client::class)->getD3OneObjectUrl((string) $bestellung->d3id) }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="inline-flex"
+                                >
+                                    <flux:badge color="emerald" size="sm">{{ \Illuminate\Support\Str::limit($bestellung->d3id, 12) }}</flux:badge>
+                                </a>
                             @else
                                 <flux:badge color="zinc" size="sm">—</flux:badge>
                             @endif

@@ -153,6 +153,12 @@ class AppSettings extends BaseAppSettings
 
         #[Description('Bestellschein nach Status-Änderung auf "Bestellt" automatisch nach D3 pushen')]
         public bool $autoPushBeiBestellt = true,
+
+        #[Description('Cache-TTL in Stunden für D3 SOAP Abruf von Benutzer-Gruppen (UI-Performance)')]
+        public int $d3SoapUserGroupsCacheTtlStunden = 24,
+
+        #[Description('Cache-TTL in Stunden für D3 SOAP Abruf aller D3-Gruppen (UI-Performance)')]
+        public int $d3SoapAllGroupsCacheTtlStunden = 24,
     ) {}
 
     /**

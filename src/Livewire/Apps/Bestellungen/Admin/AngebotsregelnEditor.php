@@ -66,7 +66,7 @@ class AngebotsregelnEditor extends Component
             ]);
         }
 
-        Flux::toast(heading: 'Angebotsregeln gespeichert', variant: 'success');
+        Flux::toast(heading: 'Angebotsregeln gespeichert', text: 'Die Angebotsregeln wurden erfolgreich gespeichert.', variant: 'success');
     }
 
     public function render(): View

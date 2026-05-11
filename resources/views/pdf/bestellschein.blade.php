@@ -170,6 +170,7 @@
     $zeigtPreise = $istIntern || $istExternMitPreisen;
 
     $besteller = $bestellung->besteller ?? $bestellung->user;
+    $lieferanschriftUser = $bestellung->lieferanschriftUser ?? $besteller;
     $bestelldatum = optional($bestellung->bestellt_datum ?? $bestellung->created_at)->format('d.m.Y');
     $kontierung = is_array($bestellung->kontierung) ? $bestellung->kontierung : [];
 @endphp
@@ -205,13 +206,13 @@
             <div class="inner-bordered">
                 <strong>Lieferanschrift</strong><br>
                 <br>
-                @if ($besteller)
-                    {{ trim(($besteller->vorname ?? '').' '.($besteller->nachname ?? '')) }}<br>
-                    @if (! empty($besteller->extension2))
-                        {{ $besteller->extension2 }}<br>
+                @if ($lieferanschriftUser)
+                    {{ trim(($lieferanschriftUser->vorname ?? '').' '.($lieferanschriftUser->nachname ?? '')) }}<br>
+                    @if (! empty($lieferanschriftUser->extension2))
+                        {{ $lieferanschriftUser->extension2 }}<br>
                     @endif
                     Handwerkskammer Dortmund<br>
-                    {{ $besteller->adresse ?? '' }}@if (! empty($besteller->adresse) && (! empty($besteller->plz) || ! empty($besteller->ort))), @endif{{ trim(($besteller->plz ?? '').' '.($besteller->ort ?? '')) }}<br>
+                    {{ $lieferanschriftUser->adresse ?? '' }}@if (! empty($lieferanschriftUser->adresse) && (! empty($lieferanschriftUser->plz) || ! empty($lieferanschriftUser->ort))), @endif{{ trim(($lieferanschriftUser->plz ?? '').' '.($lieferanschriftUser->ort ?? '')) }}<br>
                 @endif
             </div>
             <div class="inner-bordered">

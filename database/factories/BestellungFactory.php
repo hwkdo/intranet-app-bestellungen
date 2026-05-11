@@ -30,6 +30,7 @@ class BestellungFactory extends Factory
             'betreff' => fake()->sentence(4),
             'begruendung' => fake()->sentence(),
             'kontierung' => null,
+            'gruppen' => ['@Rechnungen'],
             'gesamtbetrag' => fake()->randomFloat(2, 10, 5000),
             'user_id' => User::factory(),
         ];

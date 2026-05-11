@@ -12,7 +12,18 @@
                         </flux:badge>
                         <flux:text class="text-zinc-500">{{ $bestellung->nummer }}</flux:text>
                         @if ($bestellung->istInD3())
-                            <flux:badge color="sky" icon="cloud">in D3</flux:badge>
+                            @if ($this->d3OneUrl())
+                                <a
+                                    href="{{ $this->d3OneUrl() }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="inline-flex"
+                                >
+                                    <flux:badge color="sky" icon="cloud">in D3</flux:badge>
+                                </a>
+                            @else
+                                <flux:badge color="sky" icon="cloud">in D3</flux:badge>
+                            @endif
                         @endif
                     </div>
                     <div class="flex flex-wrap gap-2">
@@ -29,7 +40,7 @@
                             Wiederholen
                         </flux:button>
                         @if ($this->kannEinreichen())
-                            <flux:button size="sm" variant="primary" icon="paper-airplane" wire:click="einreichen">
+                            <flux:button size="sm" variant="primary" icon="paper-airplane" wire:click="einreichenModalOeffnen">
                                 Zur Freigabe einreichen
                             </flux:button>
                         @endif
@@ -56,53 +67,118 @@
                     <flux:tabs wire:model.live="activeTab">
                         <flux:tab name="positionen" icon="list-bullet">Positionen</flux:tab>
                         <flux:tab name="angebote" icon="document-text">Angebote / Begründung</flux:tab>
+                        <flux:tab name="d3" icon="cloud">D3-Dokumente</flux:tab>
                         <flux:tab name="notizen" icon="chat-bubble-left-ellipsis">Notizen</flux:tab>
                         <flux:tab name="verlauf" icon="clock">Verlauf</flux:tab>
                     </flux:tabs>
 
                     <flux:tab.panel name="positionen">
-                        <flux:table>
-                            <flux:table.columns>
-                                <flux:table.column>Nr.</flux:table.column>
-                                <flux:table.column>Bezeichnung</flux:table.column>
-                                <flux:table.column class="text-right">Menge</flux:table.column>
-                                <flux:table.column>Einheit</flux:table.column>
-                                <flux:table.column class="text-right">Einzelpreis</flux:table.column>
-                                <flux:table.column class="text-right">Gesamt</flux:table.column>
-                                <flux:table.column>PDF</flux:table.column>
-                            </flux:table.columns>
-                            <flux:table.rows>
-                                @foreach ($bestellung->positionen as $pos)
-                                    <flux:table.row :key="$pos->id">
-                                        <flux:table.cell>{{ $pos->nr }}</flux:table.cell>
-                                        <flux:table.cell>
-                                            <strong>{{ $pos->bezeichnung }}</strong>
-                                            @if ($pos->art_nr)
-                                                <br><small class="text-zinc-500">Art.-Nr.: {{ $pos->art_nr }}</small>
-                                            @endif
-                                        </flux:table.cell>
-                                        <flux:table.cell class="text-right">{{ number_format((float) $pos->menge, 2, ',', '.') }}</flux:table.cell>
-                                        <flux:table.cell>{{ $pos->einheit }}</flux:table.cell>
-                                        <flux:table.cell class="text-right">{{ number_format((float) $pos->preis, 2, ',', '.') }} €</flux:table.cell>
-                                        <flux:table.cell class="text-right">{{ number_format($pos->gesamt(), 2, ',', '.') }} €</flux:table.cell>
-                                        <flux:table.cell>
-                                            @if ($pos->hasPositionPdf())
-                                                <a href="{{ $pos->getFirstMediaUrl('position_pdf') }}" target="_blank" class="inline-flex items-start gap-2">
-                                                    <iframe
-                                                        src="{{ $pos->getFirstMediaUrl('position_pdf') }}#toolbar=0&navpanes=0&scrollbar=0"
-                                                        class="h-12 w-16 rounded border border-zinc-200 dark:border-zinc-700"
-                                                        title="PDF Vorschau Position {{ $pos->nr }}"
-                                                    ></iframe>
-                                                    <span class="text-xs text-zinc-500">Öffnen</span>
-                                                </a>
-                                            @else
-                                                <span class="text-xs text-zinc-400">—</span>
-                                            @endif
-                                        </flux:table.cell>
-                                    </flux:table.row>
+                        <div class="mb-3 flex justify-end">
+                            @if ($this->kannBearbeiten() && ! $this->positionenBearbeiten)
+                                <flux:button size="sm" icon="pencil-square" wire:click="positionenBearbeitenStarten">
+                                    Positionen bearbeiten
+                                </flux:button>
+                            @endif
+                        </div>
+
+                        @if ($this->positionenBearbeiten)
+                            <div class="space-y-3">
+                                @foreach ($positionenDraft as $idx => $position)
+                                    <div wire:key="pos-draft-{{ $idx }}" class="grid gap-3 md:grid-cols-12 items-end rounded border border-zinc-200 p-3 dark:border-zinc-700">
+                                        <div class="md:col-span-4">
+                                            <flux:input wire:model.blur="positionenDraft.{{ $idx }}.bezeichnung" label="Bezeichnung" />
+                                            <flux:error name="positionenDraft.{{ $idx }}.bezeichnung" />
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <flux:input wire:model.blur="positionenDraft.{{ $idx }}.art_nr" label="Art.-Nr." />
+                                            <flux:error name="positionenDraft.{{ $idx }}.art_nr" />
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <flux:input wire:model.live.debounce.300ms="positionenDraft.{{ $idx }}.menge" type="number" step="0.01" label="Menge" />
+                                            <flux:error name="positionenDraft.{{ $idx }}.menge" />
+                                        </div>
+                                        <div class="md:col-span-1">
+                                            <flux:input wire:model.blur="positionenDraft.{{ $idx }}.einheit" label="Einheit" />
+                                            <flux:error name="positionenDraft.{{ $idx }}.einheit" />
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <flux:input wire:model.live.debounce.300ms="positionenDraft.{{ $idx }}.preis" type="number" step="0.01" label="Einzelpreis" />
+                                            <flux:error name="positionenDraft.{{ $idx }}.preis" />
+                                        </div>
+                                        <div class="md:col-span-1">
+                                            <flux:checkbox wire:model.live="positionenDraft.{{ $idx }}.pdf_position" label="PDF" />
+                                        </div>
+                                        @if ($position['pdf_position'] ?? false)
+                                            <div class="md:col-span-11">
+                                                <input
+                                                    type="file"
+                                                    wire:model="positionenDraftPdfs.{{ $idx }}"
+                                                    accept="application/pdf,.pdf"
+                                                    class="block w-full text-xs text-zinc-600 dark:text-zinc-300 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-zinc-100 file:text-xs hover:file:bg-zinc-200 dark:file:bg-zinc-700 dark:hover:file:bg-zinc-600"
+                                                />
+                                                <flux:error name="positionenDraftPdfs.{{ $idx }}" />
+                                            </div>
+                                        @endif
+                                        <div class="md:col-span-1 flex justify-end">
+                                            <flux:button type="button" size="xs" variant="ghost" icon="trash" wire:click="positionDraftEntfernen({{ $idx }})" />
+                                        </div>
+                                    </div>
                                 @endforeach
-                            </flux:table.rows>
-                        </flux:table>
+                            </div>
+
+                            <div class="mt-3 flex items-center justify-between">
+                                <flux:button type="button" size="sm" icon="plus" wire:click="positionDraftHinzufuegen">
+                                    Position hinzufügen
+                                </flux:button>
+                                <div class="flex gap-2">
+                                    <flux:button type="button" variant="ghost" wire:click="positionenBearbeitenAbbrechen">Abbrechen</flux:button>
+                                    <flux:button type="button" variant="primary" icon="check" wire:click="positionenSpeichern">Speichern</flux:button>
+                                </div>
+                            </div>
+                        @else
+                            <flux:table>
+                                <flux:table.columns>
+                                    <flux:table.column>Nr.</flux:table.column>
+                                    <flux:table.column>Bezeichnung</flux:table.column>
+                                    <flux:table.column class="text-right">Menge</flux:table.column>
+                                    <flux:table.column>Einheit</flux:table.column>
+                                    <flux:table.column class="text-right">Einzelpreis</flux:table.column>
+                                    <flux:table.column class="text-right">Gesamt</flux:table.column>
+                                    <flux:table.column>PDF</flux:table.column>
+                                </flux:table.columns>
+                                <flux:table.rows>
+                                    @foreach ($bestellung->positionen as $pos)
+                                        <flux:table.row :key="$pos->id">
+                                            <flux:table.cell>{{ $pos->nr }}</flux:table.cell>
+                                            <flux:table.cell>
+                                                <strong>{{ $pos->bezeichnung }}</strong>
+                                                @if ($pos->art_nr)
+                                                    <br><small class="text-zinc-500">Art.-Nr.: {{ $pos->art_nr }}</small>
+                                                @endif
+                                            </flux:table.cell>
+                                            <flux:table.cell class="text-right">{{ number_format((float) $pos->menge, 2, ',', '.') }}</flux:table.cell>
+                                            <flux:table.cell>{{ $pos->einheit }}</flux:table.cell>
+                                            <flux:table.cell class="text-right">{{ number_format((float) $pos->preis, 2, ',', '.') }} €</flux:table.cell>
+                                            <flux:table.cell class="text-right">{{ number_format($pos->gesamt(), 2, ',', '.') }} €</flux:table.cell>
+                                            <flux:table.cell>
+                                                @if ($pos->hasPositionPdf())
+                                                    <a href="{{ $pos->getFirstMediaUrl('position_pdf') }}" target="_blank" class="inline-flex items-start gap-2">
+                                                        <iframe
+                                                            src="{{ $pos->getFirstMediaUrl('position_pdf') }}#toolbar=0&navpanes=0&scrollbar=0"
+                                                            class="h-12 w-16 rounded border border-zinc-200 dark:border-zinc-700"
+                                                            title="PDF Vorschau Position {{ $pos->nr }}"
+                                                        ></iframe>
+                                                        <span class="text-xs text-zinc-500">Öffnen</span>
+                                                    </a>
+                                                @else
+                                                    <span class="text-xs text-zinc-400">—</span>
+                                                @endif
+                                            </flux:table.cell>
+                                        </flux:table.row>
+                                    @endforeach
+                                </flux:table.rows>
+                            </flux:table>
+                        @endif
                     </flux:tab.panel>
 
                     <flux:tab.panel name="angebote">
@@ -159,6 +235,59 @@
                                 </flux:table.rows>
                             </flux:table>
                         @endif
+                    </flux:tab.panel>
+
+                    <flux:tab.panel name="d3">
+                        <div class="space-y-4">
+                            <div class="flex flex-wrap gap-2">
+                                <flux:badge :color="$this->d3DokumenteAmpel['bestellschein'] ? 'emerald' : 'zinc'" size="sm">
+                                    Bestellschein
+                                </flux:badge>
+                                <flux:badge :color="$this->d3DokumenteAmpel['rechnung'] ? 'emerald' : 'zinc'" size="sm">
+                                    Rechnung
+                                </flux:badge>
+                                <flux:badge :color="$this->d3DokumenteAmpel['lieferschein'] ? 'emerald' : 'zinc'" size="sm">
+                                    Lieferschein
+                                </flux:badge>
+                            </div>
+
+                            @if (! $d3DokumenteGeladen)
+                                <flux:button size="sm" icon="magnifying-glass" wire:click="ladeD3Dokumente">
+                                    D3-Dokumente laden
+                                </flux:button>
+                            @endif
+
+                            @if ($d3DokumenteGeladen && empty($d3Dokumente))
+                                <flux:text class="text-zinc-500">Keine D3-Dokumente zur BEN gefunden.</flux:text>
+                            @endif
+
+                            @if (! empty($d3Dokumente))
+                                <flux:table>
+                                    <flux:table.columns>
+                                        <flux:table.column>Art</flux:table.column>
+                                        <flux:table.column>D3-ID</flux:table.column>
+                                        <flux:table.column>Datei / Titel</flux:table.column>
+                                    </flux:table.columns>
+                                    <flux:table.rows>
+                                        @foreach ($d3Dokumente as $doc)
+                                            <flux:table.row :key="'d3-doc-'.$doc['id']">
+                                                <flux:table.cell>{{ $doc['art'] }}</flux:table.cell>
+                                                <flux:table.cell>
+                                                    @if (! empty($doc['url']))
+                                                        <a href="{{ $doc['url'] }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:underline">
+                                                            {{ $doc['id'] }}
+                                                        </a>
+                                                    @else
+                                                        {{ $doc['id'] }}
+                                                    @endif
+                                                </flux:table.cell>
+                                                <flux:table.cell>{{ $doc['filename'] ?? $doc['caption'] ?? '—' }}</flux:table.cell>
+                                            </flux:table.row>
+                                        @endforeach
+                                    </flux:table.rows>
+                                </flux:table>
+                            @endif
+                        </div>
                     </flux:tab.panel>
 
                     <flux:tab.panel name="notizen">
@@ -254,7 +383,20 @@
                     @if ($bestellung->d3id)
                         <div>
                             <dt class="text-zinc-500">D3-ID</dt>
-                            <dd>{{ $bestellung->d3id }}</dd>
+                            <dd>
+                                @if ($this->d3OneUrl())
+                                    <a
+                                        href="{{ $this->d3OneUrl() }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="text-sky-600 hover:underline"
+                                    >
+                                        {{ $bestellung->d3id }}
+                                    </a>
+                                @else
+                                    {{ $bestellung->d3id }}
+                                @endif
+                            </dd>
                         </div>
                     @endif
                     @if ($bestellung->wiederholt_von_id)
@@ -302,6 +444,37 @@
                         <flux:button type="button" variant="ghost">Abbrechen</flux:button>
                     </flux:modal.close>
                     <flux:button type="submit" variant="primary" icon="check">Freigeben</flux:button>
+                </div>
+            </form>
+        </flux:modal>
+
+        <flux:modal name="einreichen-modal" :show="false">
+            <form wire:submit="einreichen" class="space-y-4">
+                <flux:heading size="lg">Zur Freigabe einreichen</flux:heading>
+                <flux:text>{{ $bestellung->nummer }} – {{ number_format((float) $bestellung->gesamtbetrag, 2, ',', '.') }} €</flux:text>
+                <flux:field>
+                    <flux:label>Freigeber auswählen</flux:label>
+                    <flux:select
+                        variant="listbox"
+                        searchable
+                        clearable
+                        wire:model="einreichenAnUserId"
+                        placeholder="Freigeber suchen…"
+                    >
+                        @foreach ($this->moeglicheEinreichFreigeberOptions() as $id => $name)
+                            <flux:select.option value="{{ $id }}">{{ $name }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                    <flux:error name="einreichenAnUserId" />
+                </flux:field>
+                @foreach ($this->einreichFreigeberHinweise as $hinweis)
+                    <flux:callout icon="information-circle">{{ $hinweis }}</flux:callout>
+                @endforeach
+                <div class="flex justify-end gap-2">
+                    <flux:modal.close>
+                        <flux:button type="button" variant="ghost">Abbrechen</flux:button>
+                    </flux:modal.close>
+                    <flux:button type="submit" variant="primary" icon="paper-airplane">Einreichen</flux:button>
                 </div>
             </form>
         </flux:modal>

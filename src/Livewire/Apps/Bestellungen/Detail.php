@@ -16,7 +16,10 @@ use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
+use Hwkdo\D3RestLaravel\Client as D3Client;
+use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Title;
@@ -34,7 +37,22 @@ class Detail extends Component
     #[Url(as: 'aktion')]
     public ?string $aktionParam = null;
 
+    #[Url(as: 'hinweis')]
+    public ?string $hinweisParam = null;
+
     public string $activeTab = 'positionen';
+
+    public bool $d3DokumenteGeladen = false;
+
+    /** @var array<int, array<string, mixed>> */
+    public array $d3Dokumente = [];
+
+    /** @var array<string, bool> */
+    public array $d3DokumenteAmpel = [
+        'bestellschein' => false,
+        'rechnung' => false,
+        'lieferschein' => false,
+    ];
 
     public ?string $freigabeNachricht = null;
 
@@ -43,6 +61,22 @@ class Detail extends Component
     public ?int $weiterleitenAnUserId = null;
 
     public ?string $weiterleitenNachricht = null;
+
+    public ?int $einreichenAnUserId = null;
+
+    public bool $positionenBearbeiten = false;
+
+    /** @var array<int, array<string, mixed>> */
+    public array $positionenDraft = [];
+
+    /** @var array<int, mixed> */
+    public array $positionenDraftPdfs = [];
+
+    /** @var array<int, string> */
+    public array $einreichFreigeberOptionen = [];
+
+    /** @var array<int, string> */
+    public array $einreichFreigeberHinweise = [];
 
     public string $notizText = '';
 
@@ -68,6 +102,23 @@ class Detail extends Component
         if ($this->aktionParam === 'ablehnen' && $this->kannFreigeben()) {
             Flux::modal('ablehnen-modal')->show();
         }
+        if ($this->aktionParam === 'einreichen' && $this->kannEinreichen()) {
+            if ($this->hinweisParam === 'freigeber') {
+                Flux::toast(
+                    heading: 'Hinweis',
+                    text: 'Es konnte kein eindeutiger Freigeber ermittel werden. Bitte Freigeber auswählen',
+                    variant: 'warning',
+                );
+            }
+            $this->einreichenModalOeffnen();
+        }
+    }
+
+    public function updatedActiveTab(string $value): void
+    {
+        if ($value === 'd3' && ! $this->d3DokumenteGeladen) {
+            $this->ladeD3Dokumente();
+        }
     }
 
     public function kannFreigeben(): bool
@@ -83,6 +134,62 @@ class Detail extends Component
     {
         return $this->bestellung->status === BestellungStatus::Freigegeben
             && Auth::user()?->can('manage-app-bestellungen');
+    }
+
+    public function d3OneUrl(): ?string
+    {
+        if (! $this->bestellung->d3id) {
+            return null;
+        }
+
+        return app(D3Client::class)->getD3OneObjectUrl((string) $this->bestellung->d3id);
+    }
+
+    public function ladeD3Dokumente(): void
+    {
+        try {
+            $result = app(D3Client::class)->SearchResult(fulltext: $this->bestellung->nummer);
+            $collection = $result instanceof Collection ? $result : collect($result ?? []);
+
+            $this->d3Dokumente = $collection
+                ->filter(fn ($doc) => isset($doc->id))
+                ->map(function ($doc): array {
+                    $docType = $doc->doc_type instanceof DocTypeEnum ? $doc->doc_type : null;
+                    $docTypeValue = $docType?->value;
+
+                    return [
+                        'id' => (string) $doc->id,
+                        'art' => $this->d3DokumentArtLabel($docTypeValue),
+                        'doc_type' => $docTypeValue,
+                        'filename' => $doc->filename ?? null,
+                        'caption' => $doc->betreff ?? null,
+                        'url' => $doc->d3one ?? app(D3Client::class)->getD3OneObjectUrl((string) $doc->id),
+                    ];
+                })
+                ->values()
+                ->all();
+
+            $this->d3DokumenteAmpel = [
+                'bestellschein' => collect($this->d3Dokumente)->contains(fn (array $doc): bool => $doc['doc_type'] === DocTypeEnum::Bestellschein->value),
+                'rechnung' => collect($this->d3Dokumente)->contains(fn (array $doc): bool => $doc['doc_type'] === DocTypeEnum::Zahlungsbeleg->value),
+                'lieferschein' => collect($this->d3Dokumente)->contains(fn (array $doc): bool => $doc['doc_type'] === DocTypeEnum::Lieferschein->value),
+            ];
+            $this->d3DokumenteGeladen = true;
+        } catch (\Throwable $e) {
+            Flux::toast(heading: 'D3-Suche fehlgeschlagen', text: $e->getMessage(), variant: 'error');
+        }
+    }
+
+    private function d3DokumentArtLabel(?string $docType): string
+    {
+        return match ($docType) {
+            DocTypeEnum::Bestellschein->value => 'Bestellschein',
+            DocTypeEnum::Zahlungsbeleg->value => 'Rechnung',
+            DocTypeEnum::Lieferschein->value => 'Lieferschein',
+            DocTypeEnum::Bestellvorgang->value => 'Bestellvorgang',
+            DocTypeEnum::Angebote->value => 'Angebot',
+            default => $docType ?? 'Unbekannt',
+        };
     }
 
     public function kannBearbeiten(): bool
@@ -150,7 +257,7 @@ class Detail extends Component
         }
         try {
             app(BestellungWorkflow::class)->bestellen($this->bestellung, Auth::user());
-            Flux::toast(heading: 'Bestellt', text: 'Die Bestellung wurde an D3 übergeben.', variant: 'success');
+            Flux::toast(heading: 'Bestellt', text: 'Die Bestellung wurde erfolgreich an D3 übertragen.', variant: 'success');
             $this->refreshBestellung();
         } catch (\Throwable $e) {
             Flux::toast(heading: 'Fehler', text: $e->getMessage(), variant: 'error');
@@ -164,12 +271,198 @@ class Detail extends Component
         }
 
         try {
-            app(BestellungWorkflow::class)->einreichen($this->bestellung, Auth::user());
+            $this->validate([
+                'einreichenAnUserId' => ['required', 'integer'],
+            ], [
+                'einreichenAnUserId.required' => 'Bitte wählen Sie einen Freigeber aus.',
+            ]);
+
+            app(BestellungWorkflow::class)->einreichen($this->bestellung, Auth::user(), $this->einreichenAnUserId);
+            Flux::modal('einreichen-modal')->close();
             Flux::toast(heading: 'Zur Freigabe eingereicht', text: 'Die Bestellung wurde zur Freigabe weitergeleitet.', variant: 'success');
             $this->refreshBestellung();
         } catch (\Throwable $e) {
             Flux::toast(heading: 'Fehler', text: $e->getMessage(), variant: 'error');
         }
+    }
+
+    public function einreichenModalOeffnen(): void
+    {
+        if (! $this->kannEinreichen()) {
+            return;
+        }
+
+        $this->einreichenAnUserId = null;
+        $this->prepareEinreichFreigeberAuswahl();
+        Flux::modal('einreichen-modal')->show();
+    }
+
+    public function positionenBearbeitenStarten(): void
+    {
+        if (! $this->kannBearbeiten()) {
+            return;
+        }
+
+        $this->positionenDraft = $this->bestellung->positionen
+            ->sortBy('nr')
+            ->values()
+            ->map(fn (Position $pos): array => [
+                'id' => $pos->getKey(),
+                'bezeichnung' => $pos->bezeichnung,
+                'art_nr' => $pos->art_nr,
+                'menge' => (float) $pos->menge,
+                'einheit' => $pos->einheit,
+                'preis' => (float) $pos->preis,
+                'pdf_position' => $pos->hasPositionPdf(),
+            ])->all();
+        $this->positionenDraftPdfs = array_fill(0, count($this->positionenDraft), null);
+
+        $this->positionenBearbeiten = true;
+    }
+
+    public function positionenBearbeitenAbbrechen(): void
+    {
+        $this->positionenBearbeiten = false;
+        $this->positionenDraft = [];
+        $this->positionenDraftPdfs = [];
+    }
+
+    public function positionDraftHinzufuegen(): void
+    {
+        if (! $this->positionenBearbeiten) {
+            return;
+        }
+
+        $this->positionenDraft[] = [
+            'id' => null,
+            'bezeichnung' => '',
+            'art_nr' => null,
+            'menge' => 1,
+            'einheit' => 'Stk',
+            'preis' => 0,
+            'pdf_position' => false,
+        ];
+        $this->positionenDraftPdfs[] = null;
+    }
+
+    public function positionDraftEntfernen(int $idx): void
+    {
+        if (! $this->positionenBearbeiten) {
+            return;
+        }
+
+        unset($this->positionenDraft[$idx]);
+        unset($this->positionenDraftPdfs[$idx]);
+        $this->positionenDraft = array_values($this->positionenDraft);
+        $this->positionenDraftPdfs = array_values($this->positionenDraftPdfs);
+    }
+
+    public function positionenSpeichern(): void
+    {
+        if (! $this->kannBearbeiten()) {
+            return;
+        }
+
+        $this->validate([
+            'positionenDraft' => ['required', 'array', 'min:1'],
+            'positionenDraft.*.bezeichnung' => ['required', 'string', 'max:255'],
+            'positionenDraft.*.art_nr' => ['nullable', 'string', 'max:100'],
+            'positionenDraft.*.menge' => ['required', 'numeric', 'min:0.01'],
+            'positionenDraft.*.einheit' => ['nullable', 'string', 'max:20'],
+            'positionenDraft.*.preis' => ['required', 'numeric', 'min:0'],
+            'positionenDraft.*.pdf_position' => ['boolean'],
+            'positionenDraftPdfs' => ['array'],
+            'positionenDraftPdfs.*' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+        ]);
+
+        foreach ($this->positionenDraft as $idx => $draft) {
+            if (! ($draft['pdf_position'] ?? false)) {
+                continue;
+            }
+
+            $hasExistingPdf = false;
+            if (! empty($draft['id'])) {
+                $existing = $this->bestellung->positionen->firstWhere('id', $draft['id']);
+                $hasExistingPdf = $existing?->hasPositionPdf() ?? false;
+            }
+
+            if (! $hasExistingPdf && empty($this->positionenDraftPdfs[$idx])) {
+                $this->addError('positionenDraftPdfs.'.$idx, 'Bitte wählen Sie für die PDF-Position eine PDF-Datei aus.');
+            }
+        }
+
+        if ($this->getErrorBag()->isNotEmpty()) {
+            return;
+        }
+
+        DB::transaction(function (): void {
+            $vorhandeneIds = $this->bestellung->positionen->pluck('id')->all();
+            $draftIds = collect($this->positionenDraft)->pluck('id')->filter()->values()->all();
+            $zuLoeschen = array_diff($vorhandeneIds, $draftIds);
+
+            if ($zuLoeschen !== []) {
+                Position::query()
+                    ->where('bestellung_id', $this->bestellung->getKey())
+                    ->whereIn('id', $zuLoeschen)
+                    ->delete();
+            }
+
+            foreach ($this->positionenDraft as $idx => $draft) {
+                $payload = [
+                    'nr' => $idx + 1,
+                    'bezeichnung' => (string) $draft['bezeichnung'],
+                    'art_nr' => $draft['art_nr'] ?: null,
+                    'menge' => (float) $draft['menge'],
+                    'einheit' => $draft['einheit'] ?: null,
+                    'preis' => (float) $draft['preis'],
+                ];
+
+                if (! empty($draft['id'])) {
+                    Position::query()
+                        ->where('bestellung_id', $this->bestellung->getKey())
+                        ->where('id', $draft['id'])
+                        ->update($payload);
+
+                    $position = Position::query()->find($draft['id']);
+                    if ($position) {
+                        if (! empty($this->positionenDraftPdfs[$idx])) {
+                            $pdf = $this->positionenDraftPdfs[$idx];
+                            $media = $position->addMedia($pdf->getRealPath())
+                                ->usingFileName($pdf->getClientOriginalName())
+                                ->toMediaCollection('position_pdf');
+                            $position->forceFill(['file' => $media->getPathRelativeToRoot()])->save();
+                        } elseif (! ($draft['pdf_position'] ?? false)) {
+                            $position->clearMediaCollection('position_pdf');
+                            $position->forceFill(['file' => null])->save();
+                        }
+                    }
+                } else {
+                    $position = Position::create(array_merge($payload, [
+                        'bestellung_id' => $this->bestellung->getKey(),
+                        'art_id' => null,
+                        'oberbegriff' => null,
+                    ]));
+
+                    if (! empty($this->positionenDraftPdfs[$idx])) {
+                        $pdf = $this->positionenDraftPdfs[$idx];
+                        $media = $position->addMedia($pdf->getRealPath())
+                            ->usingFileName($pdf->getClientOriginalName())
+                            ->toMediaCollection('position_pdf');
+                        $position->forceFill(['file' => $media->getPathRelativeToRoot()])->save();
+                    }
+                }
+            }
+        });
+
+        $this->bestellung->refreshGesamtbetrag();
+        $this->refreshBestellung();
+        $this->positionenBearbeitenAbbrechen();
+
+        Flux::toast(
+            heading: 'Positionen gespeichert',
+            text: 'Die Positionen wurden aktualisiert.',
+            variant: 'success',
+        );
     }
 
     public function wiederholen(): void
@@ -313,6 +606,11 @@ class Detail extends Component
             ->all();
     }
 
+    public function moeglicheEinreichFreigeberOptions(): array
+    {
+        return $this->einreichFreigeberOptionen;
+    }
+
     /**
      * @return array<int, string>
      */
@@ -347,5 +645,85 @@ class Detail extends Component
         $this->bestellung = $this->bestellung->fresh([
             'user', 'freigeber', 'besteller', 'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user',
         ]);
+    }
+
+    private function prepareEinreichFreigeberAuswahl(): void
+    {
+        $pool = app(WertgrenzenService::class)->freigeber1FuerBestellung($this->bestellung);
+        $optionen = collect();
+        $hinweise = [];
+        $vorgesetzte = $this->alleVorgesetztenDesBestellers();
+
+        foreach ($pool as $kandidat) {
+            $vertretung = $this->d3VertretungWennAbwesend($kandidat);
+
+            if ($vertretung['is_absent'] === false) {
+                $optionen->put($kandidat->id, $kandidat->name);
+                continue;
+            }
+
+            if ($vertretung['deputy'] instanceof User) {
+                $deputy = $vertretung['deputy'];
+                $optionen->put($deputy->id, $deputy->name);
+                $hinweise[] = sprintf(
+                    '%s ist in D3 abwesend. Vertretung: %s.',
+                    $kandidat->name,
+                    $deputy->name,
+                );
+                continue;
+            }
+
+            $hinweise[] = sprintf(
+                'Der Freigeber %s hat keine Vertretung angegeben, bitte wählen Sie einen anderen Vertreter.',
+                $kandidat->name,
+            );
+
+            foreach ($vorgesetzte as $vorgesetzter) {
+                $optionen->put($vorgesetzter->id, $vorgesetzter->name);
+            }
+        }
+
+        $this->einreichFreigeberOptionen = $optionen->all();
+        $this->einreichFreigeberHinweise = $hinweise;
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    private function alleVorgesetztenDesBestellers(): Collection
+    {
+        $besteller = $this->bestellung->user;
+        if (! $besteller) {
+            return collect();
+        }
+
+        return $besteller->getVorgesetzte()
+            ->reject(fn (User $u): bool => $u->getKey() === $besteller->getKey())
+            ->unique('id')
+            ->values();
+    }
+
+    /**
+     * @return array{is_absent: bool, deputy: ?User}
+     */
+    private function d3VertretungWennAbwesend(User $kandidat): array
+    {
+        try {
+            $client = app(D3Client::class);
+            $d3UserId = $client->getUserIdByUsername($kandidat->username);
+
+            if (! $d3UserId) {
+                return ['is_absent' => false, 'deputy' => null];
+            }
+
+            $absence = $client->getUserAbsence($d3UserId);
+
+            return [
+                'is_absent' => (bool) $absence->abwesend,
+                'deputy' => $absence->vertreter instanceof User ? $absence->vertreter : null,
+            ];
+        } catch (\Throwable) {
+            return ['is_absent' => false, 'deputy' => null];
+        }
     }
 }

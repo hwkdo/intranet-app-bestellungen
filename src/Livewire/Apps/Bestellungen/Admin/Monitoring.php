@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Admin;
 
 use Flux\Flux;
-use Hwkdo\IntranetAppBestellungen\Jobs\PushBestellscheinToD3Job;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Services\D3\BestellscheinD3Service;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -32,22 +32,39 @@ class Monitoring extends Component
 
     public function rePush(int $bestellungId): void
     {
-        PushBestellscheinToD3Job::dispatch($bestellungId, rePush: true);
-        Flux::toast(heading: 'D3 Re-Push gestartet', variant: 'success');
+        $bestellung = Bestellung::find($bestellungId);
+        if (! $bestellung) {
+            Flux::toast(heading: 'Bestellung nicht gefunden', text: 'Die Bestellung konnte nicht geladen werden.', variant: 'warning');
+
+            return;
+        }
+
+        try {
+            $newId = app(BestellscheinD3Service::class)->rePush($bestellung, Auth::user());
+            if (! $newId) {
+                Flux::toast(heading: 'D3 Re-Push fehlgeschlagen', text: 'D3 hat keine neue Dokument-ID zurückgegeben.', variant: 'error');
+
+                return;
+            }
+
+            Flux::toast(heading: 'D3 Re-Push erfolgreich', text: 'Neue D3-ID: '.$newId, variant: 'success');
+        } catch (\Throwable $e) {
+            Flux::toast(heading: 'D3 Re-Push fehlgeschlagen', text: $e->getMessage(), variant: 'error');
+        }
     }
 
     public function quasiDelete(int $bestellungId): void
     {
         $bestellung = Bestellung::find($bestellungId);
         if (! $bestellung || ! $bestellung->d3id) {
-            Flux::toast(heading: 'Keine D3-ID hinterlegt', variant: 'warning');
+            Flux::toast(heading: 'Keine D3-ID hinterlegt', text: 'Für diese Bestellung ist keine D3-ID vorhanden.', variant: 'warning');
 
             return;
         }
         try {
             \Hwkdo\D3RestLaravel\Facades\D3RestLaravel::quasiDeleteDoc($bestellung->d3id);
             $bestellung->forceFill(['d3id' => null, 'd3_pushed_at' => null])->save();
-            Flux::toast(heading: 'D3-Eintrag quasi-gelöscht', variant: 'success');
+            Flux::toast(heading: 'D3-Eintrag quasi-gelöscht', text: 'Die D3-ID wurde lokal entfernt.', variant: 'success');
         } catch (\Throwable $e) {
             Flux::toast(heading: 'Fehler', text: $e->getMessage(), variant: 'error');
         }
@@ -62,7 +79,7 @@ class Monitoring extends Component
 
         if (! $bestellung) {
             $this->d3SearchResults = collect();
-            Flux::toast(heading: 'Keine Bestellung mit dieser Nummer gefunden', variant: 'warning');
+            Flux::toast(heading: 'Keine Bestellung gefunden', text: 'Zu der eingegebenen Nummer wurde keine Bestellung gefunden.', variant: 'warning');
 
             return;
         }

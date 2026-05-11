@@ -78,14 +78,14 @@ class AnlagenEditor extends Component
         );
 
         Flux::modal('anlage-modal')->close();
-        Flux::toast(heading: 'Anlage gespeichert', variant: 'success');
+        Flux::toast(heading: 'Anlage gespeichert', text: 'Die Anlage wurde erfolgreich gespeichert.', variant: 'success');
         unset($this->anlagen);
     }
 
     public function loeschen(int $id): void
     {
         Anlage::query()->whereKey($id)->delete();
-        Flux::toast(heading: 'Anlage gelöscht', variant: 'success');
+        Flux::toast(heading: 'Anlage gelöscht', text: 'Die Anlage wurde erfolgreich gelöscht.', variant: 'success');
         unset($this->anlagen);
     }
 

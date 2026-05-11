@@ -19,7 +19,7 @@ class BestellscheinPdfService
 
     public function html(Bestellung $bestellung): string
     {
-        $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'aktionen.user']);
+        $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'lieferanschriftUser', 'aktionen.user']);
 
         return View::make('intranet-app-bestellungen::pdf.bestellschein', [
             'bestellung' => $bestellung,
