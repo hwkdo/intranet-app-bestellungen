@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Admin;
 
 use App\Models\Gvp;
-use App\Models\User;
 use Flux\Flux;
 use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Validator;
+use JsonException;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 use Spatie\Permission\Models\Role;
@@ -18,6 +19,9 @@ class WertgrenzenEditor extends Component
 {
     /** @var array<int, array<string, mixed>> */
     public array $stufen = [];
+
+    /** JSON-Zeichenkette zum Import nur der Freigabe-Stufen (Dev → Prod). */
+    public string $freigabeStufenJsonImport = '';
 
     public function mount(): void
     {
@@ -104,10 +108,110 @@ class WertgrenzenEditor extends Component
         $this->stufen = $this->stufen;
     }
 
+    /**
+     * Aktuelle Freigabe-Stufen als formatiertes JSON (nur dieses Array, kein vollständiges AppSettings).
+     */
+    public function freigabeStufenAlsFormatiertesJson(): string
+    {
+        return json_encode($this->stufen, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    }
+
+    public function freigabeStufenAusJsonUebernehmenUndSpeichern(): void
+    {
+        $this->resetErrorBag('freigabeStufenJsonImport');
+
+        $trimmed = trim($this->freigabeStufenJsonImport);
+        if ($trimmed === '') {
+            $this->addError('freigabeStufenJsonImport', 'Bitte JSON einfügen.');
+            Flux::toast(
+                heading: 'Import',
+                text: 'Das JSON-Feld ist leer.',
+                variant: 'warning',
+            );
+
+            return;
+        }
+
+        try {
+            $decoded = json_decode($trimmed, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException $e) {
+            $this->addError('freigabeStufenJsonImport', 'Ungültiges JSON: '.$e->getMessage());
+            Flux::toast(
+                heading: 'JSON ungültig',
+                text: $e->getMessage(),
+                variant: 'danger',
+            );
+
+            return;
+        }
+
+        if (! is_array($decoded)) {
+            $this->addError('freigabeStufenJsonImport', 'Das JSON muss ein Array von Freigabe-Stufen sein.');
+            Flux::toast(
+                heading: 'Import',
+                text: 'Erwartet wird ein JSON-Array (Liste von Stufen).',
+                variant: 'danger',
+            );
+
+            return;
+        }
+
+        if (! array_is_list($decoded)) {
+            $this->addError('freigabeStufenJsonImport', 'Das JSON muss ein Array (Liste) sein, kein Objekt.');
+            Flux::toast(
+                heading: 'Import',
+                text: 'Bitte ein JSON-Array exportieren, kein Objekt mit benannten Schlüsseln.',
+                variant: 'danger',
+            );
+
+            return;
+        }
+
+        /** @var array<int, array<string, mixed>> $stufen */
+        $stufen = $decoded;
+
+        $validator = Validator::make(['stufen' => $stufen], $this->rules());
+        if ($validator->fails()) {
+            $first = $validator->errors()->first();
+            $this->addError('freigabeStufenJsonImport', $first);
+            Flux::toast(
+                heading: 'Validierung',
+                text: $first,
+                variant: 'danger',
+            );
+
+            return;
+        }
+
+        /** @var array<int, array<string, mixed>> $validated */
+        $validated = $validator->validated()['stufen'];
+        $this->stufen = array_values($validated);
+        $this->freigabeStufenJsonImport = '';
+
+        $this->persistiereFreigabeStufenInSettings();
+
+        Flux::toast(
+            heading: 'Freigabe-Stufen importiert',
+            text: count($this->stufen).' Stufen gespeichert. Rollen-Namen müssen in dieser Umgebung existieren.',
+            variant: 'success',
+        );
+    }
+
     public function speichern(): void
     {
         $this->validate();
 
+        $this->persistiereFreigabeStufenInSettings();
+
+        Flux::toast(
+            heading: 'Wertgrenzen gespeichert',
+            text: count($this->stufen).' Stufen aktiv.',
+            variant: 'success',
+        );
+    }
+
+    private function persistiereFreigabeStufenInSettings(): void
+    {
         $current = IntranetAppBestellungenSettings::current();
         if ($current) {
             $appSettings = $current->settings instanceof AppSettings ? $current->settings : new AppSettings;
@@ -122,12 +226,6 @@ class WertgrenzenEditor extends Component
                 'settings' => AppSettings::from(['freigabeStufen' => $this->stufen])->toArray(),
             ]);
         }
-
-        Flux::toast(
-            heading: 'Wertgrenzen gespeichert',
-            text: count($this->stufen).' Stufen aktiv.',
-            variant: 'success',
-        );
     }
 
     #[Computed]

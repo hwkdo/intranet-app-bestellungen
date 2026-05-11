@@ -170,5 +170,66 @@
         <div class="flex justify-end">
             <flux:button variant="primary" icon="check" wire:click="speichern">Speichern</flux:button>
         </div>
+
+        <flux:card>
+            <flux:heading size="sm" class="mb-2">Freigabe-Stufen als JSON (nur dieses Array)</flux:heading>
+            <flux:description class="mb-3">
+                Export aus einer Umgebung kopieren und in einer anderen einfügen. Es wird nur
+                <code class="rounded bg-zinc-100 px-1 py-0.5 text-xs dark:bg-zinc-800">freigabeStufen</code>
+                ersetzt; alle übrigen App-Einstellungen bleiben unverändert. Rollen-Namen müssen in der Zielumgebung existieren.
+            </flux:description>
+
+            <div x-data="{ copied: false }" class="mb-4 space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <flux:subheading>Export (aktueller Stand)</flux:subheading>
+                    <flux:button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        icon="clipboard-document"
+                        x-bind:disabled="copied"
+                        x-on:click="
+                            navigator.clipboard.writeText(document.getElementById('freigabe-stufen-export-json').value).then(() => {
+                                copied = true;
+                                setTimeout(() => (copied = false), 2000);
+                            })
+                        "
+                    >
+                        <span x-show="!copied">In Zwischenablage kopieren</span>
+                        <span x-show="copied" x-cloak>Kopiert</span>
+                    </flux:button>
+                </div>
+                <textarea
+                    id="freigabe-stufen-export-json"
+                    readonly
+                    rows="14"
+                    class="w-full resize-y rounded-lg border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                >{{ $this->freigabeStufenAlsFormatiertesJson() }}</textarea>
+            </div>
+
+            <flux:separator class="my-4" />
+
+            <flux:subheading class="mb-2">Import</flux:subheading>
+            <flux:field>
+                <flux:label>JSON einfügen</flux:label>
+                <flux:textarea
+                    wire:model="freigabeStufenJsonImport"
+                    rows="10"
+                    class="font-mono text-xs"
+                    placeholder='[ { "bezeichnung": "…", "vonBetrag": 0, … }, … ]'
+                />
+                <flux:error name="freigabeStufenJsonImport" />
+            </flux:field>
+            <div class="mt-3 flex flex-wrap gap-2">
+                <flux:button
+                    type="button"
+                    variant="primary"
+                    icon="arrow-down-tray"
+                    wire:click="freigabeStufenAusJsonUebernehmenUndSpeichern"
+                >
+                    Aus JSON übernehmen &amp; speichern
+                </flux:button>
+            </div>
+        </flux:card>
     </div>
 </div>
