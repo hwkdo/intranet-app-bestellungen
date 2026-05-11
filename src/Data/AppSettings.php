@@ -148,6 +148,9 @@ class AppSettings extends BaseAppSettings
             ],
         ],
 
+        #[Description('BEN-Nummern-Abgleich mit Legacy-Intranet aktiv (temporär – deaktivieren, sobald alle Bestellungen nur noch im neuen Intranet erstellt werden)')]
+        public bool $legacyBenPruefungAktiv = true,
+
         #[Description('D3-Notizen zu Bestellungen automatisch nach D3 synchronisieren')]
         public bool $d3NotizenSyncAktiv = true,
 

@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Services;
 
 use App\Models\User;
+use App\Services\IntranetLegacyService;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
 use Illuminate\Support\Facades\DB;
 
 class BenNumberService
 {
+    public function __construct(private readonly IntranetLegacyService $legacyService) {}
+
     /**
      * Erzeugt eine BEN-Nummer im Legacy-Format der HWK Dortmund.
      *
@@ -22,28 +25,37 @@ class BenNumberService
      * - JJ: zweistelliges Jahr des Haushaltsjahres
      * - NNN: dreistellige laufende Nummer pro User und Haushaltsjahr (001, 002, …)
      *
-     * Beispiel: "3" + "1234" + "26" + "001" => "31234260001" → "3" + "1234" + "26" + "001" = 312342601
+     * Die nächste Sequenznummer wird systemübergreifend ermittelt: Es wird das Maximum
+     * aus dem lokalen Zähler (neue DB) und dem höchsten Legacy-Wert verwendet,
+     * damit BEN-Nummern zwischen neuem und Legacy-Intranet eindeutig bleiben.
+     *
+     * Beispiel: "3" + "1234" + "26" + "001" => "312342601"
      */
     public function next(User $user, ?int $haushaltsjahr = null): string
     {
         $jahr = $haushaltsjahr ?? (int) date('Y');
         $jahrKurz = substr((string) $jahr, -2);
-        $praefix = IntranetAppBestellungenSettings::resolvedAppSettings()->benNummerPrefix;
+        $appSettings = IntranetAppBestellungenSettings::resolvedAppSettings();
+        $praefix = $appSettings->benNummerPrefix;
         $hwkdoNummer = $this->extractHwkdoNummer($user);
+        $legacyMax = $appSettings->legacyBenPruefungAktiv
+            ? $this->legacyService->getMaxSequenceFromLegacy($hwkdoNummer, $jahrKurz)
+            : 0;
 
-        return DB::transaction(function () use ($user, $jahr, $jahrKurz, $praefix, $hwkdoNummer): string {
+        return DB::transaction(function () use ($user, $jahr, $jahrKurz, $praefix, $hwkdoNummer, $legacyMax): string {
             $prefixUserJahr = $praefix.$hwkdoNummer.$jahrKurz;
 
-            $count = Bestellung::query()
+            $localMax = Bestellung::query()
                 ->where('user_id', $user->id)
                 ->where('haushaltsjahr', $jahr)
                 ->where('nummer', 'like', $prefixUserJahr.'%')
                 ->lockForUpdate()
-                ->count();
+                ->selectRaw('MAX(CAST(RIGHT(nummer, 3) AS UNSIGNED)) as max_seq')
+                ->value('max_seq') ?? 0;
 
-            $next = $count + 1;
+            $nextSeq = max((int) $localMax, $legacyMax) + 1;
 
-            return $prefixUserJahr.sprintf('%03d', $next);
+            return $prefixUserJahr.sprintf('%03d', $nextSeq);
         });
     }
 

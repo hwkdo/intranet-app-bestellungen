@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use App\Services\IntranetLegacyService;
 use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Erstellen;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
@@ -13,6 +14,10 @@ use Livewire\Livewire;
 use Spatie\Permission\Models\Role;
 
 beforeEach(function (): void {
+    $legacyMock = Mockery::mock(IntranetLegacyService::class);
+    $legacyMock->shouldReceive('getMaxSequenceFromLegacy')->andReturn(0);
+    app()->instance(IntranetLegacyService::class, $legacyMock);
+
     Role::findOrCreate('App-Bestellungen-Admin', 'web');
 
     IntranetAppBestellungenSettings::create([

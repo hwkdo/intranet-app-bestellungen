@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\User;
+use App\Services\IntranetLegacyService;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Detail;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
@@ -10,6 +11,12 @@ use Hwkdo\IntranetAppBestellungen\Models\Position;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+
+beforeEach(function (): void {
+    $legacyMock = Mockery::mock(IntranetLegacyService::class);
+    $legacyMock->shouldReceive('getMaxSequenceFromLegacy')->andReturn(0);
+    app()->instance(IntranetLegacyService::class, $legacyMock);
+});
 
 it('dupliziert eine Bestellung mit neuer BEN-Nummer und frischem Status', function (): void {
     Storage::fake('public');
