@@ -7,6 +7,7 @@ namespace Hwkdo\IntranetAppBestellungen\Services\Stammdaten;
 use Hwkdo\BueLaravel\Facades\BueLaravel;
 use Hwkdo\IntranetAppBestellungen\Models\KostenstelleCache;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
+use Hwkdo\IntranetAppBestellungen\Support\Utf8MojibakeFixer;
 use Illuminate\Support\Facades\Log;
 
 class StammdatenSyncService
@@ -26,14 +27,20 @@ class StammdatenSyncService
                 continue;
             }
 
+            $name = (string) ($row['lieferantenname'] ?? '');
+            $strasse = $row['lieferantenstrasse'] ?? null;
+            $hausnummer = $row['lieferantenhausnummer'] ?? null;
+            $plz = $row['lieferantenplz'] ?? null;
+            $ort = $row['lieferantenort'] ?? null;
+
             LieferantCache::updateOrCreate(
                 ['lieferantennummer' => $nummer],
                 [
-                    'lieferantenname' => (string) ($row['lieferantenname'] ?? ''),
-                    'strasse' => $row['lieferantenstrasse'] ?? null,
-                    'hausnummer' => $row['lieferantenhausnummer'] ?? null,
-                    'plz' => $row['lieferantenplz'] ?? null,
-                    'ort' => $row['lieferantenort'] ?? null,
+                    'lieferantenname' => Utf8MojibakeFixer::fixIfLikelyMojibake($name) ?? '',
+                    'strasse' => $strasse === null ? null : Utf8MojibakeFixer::fixIfLikelyMojibake((string) $strasse),
+                    'hausnummer' => $hausnummer === null ? null : Utf8MojibakeFixer::fixIfLikelyMojibake((string) $hausnummer),
+                    'plz' => $plz === null ? null : Utf8MojibakeFixer::fixIfLikelyMojibake((string) $plz),
+                    'ort' => $ort === null ? null : Utf8MojibakeFixer::fixIfLikelyMojibake((string) $ort),
                     'synced_at' => $now,
                 ],
             );

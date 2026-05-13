@@ -14,6 +14,7 @@ use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
 use Hwkdo\IntranetAppBestellungen\Models\KostenstelleCache;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
+use Hwkdo\IntranetAppBestellungen\Models\LieferantNutzung;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
@@ -388,6 +389,18 @@ class Erstellen extends Component
                 }
             }
 
+            if (filled($bestellung->lieferantennummer)) {
+                LieferantNutzung::upsert(
+                    [
+                        'lieferantennummer' => $bestellung->lieferantennummer,
+                        'v3_bestellungen_count' => 1,
+                        'legacy_bestellungen_count' => 0,
+                    ],
+                    uniqueBy: ['lieferantennummer'],
+                    update: ['v3_bestellungen_count' => \Illuminate\Support\Facades\DB::raw('v3_bestellungen_count + 1')],
+                );
+            }
+
             $bestellung->refresh();
             $bestellung->refreshGesamtbetrag();
 
@@ -454,13 +467,21 @@ class Erstellen extends Component
         $term = trim($search);
 
         $results = LieferantCache::query()
+            ->leftJoin(
+                'intranet_app_bestellungen_lieferant_nutzung as ln',
+                'ln.lieferantennummer',
+                '=',
+                'intranet_app_bestellungen_lieferanten_cache.lieferantennummer'
+            )
+            ->select('intranet_app_bestellungen_lieferanten_cache.*')
             ->when($term !== '', function ($q) use ($term): void {
                 $like = '%'.$term.'%';
                 $q->where(function ($inner) use ($like): void {
                     $inner->where('lieferantenname', 'like', $like)
-                        ->orWhere('lieferantennummer', 'like', $like);
+                        ->orWhere('intranet_app_bestellungen_lieferanten_cache.lieferantennummer', 'like', $like);
                 });
             })
+            ->orderByRaw('(COALESCE(ln.legacy_bestellungen_count, 0) + COALESCE(ln.v3_bestellungen_count, 0)) DESC')
             ->orderBy('lieferantenname')
             ->limit(self::SUGGEST_LIMIT)
             ->get();

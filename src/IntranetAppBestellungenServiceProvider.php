@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppBestellungen;
 
+use Hwkdo\IntranetAppBestellungen\Commands\SyncLieferantenNutzungCommand;
 use Hwkdo\IntranetAppBestellungen\Commands\SyncStammdatenCommand;
 use Livewire\Livewire;
 use Spatie\LaravelPackageTools\Package;
@@ -18,7 +19,8 @@ class IntranetAppBestellungenServiceProvider extends PackageServiceProvider
             ->hasConfigFile()
             ->hasViews()
             ->discoversMigrations()
-            ->hasCommand(SyncStammdatenCommand::class);
+            ->hasCommand(SyncStammdatenCommand::class)
+            ->hasCommand(SyncLieferantenNutzungCommand::class);
     }
 
     public function bootingPackage(): void
