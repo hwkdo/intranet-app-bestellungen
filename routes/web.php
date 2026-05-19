@@ -20,6 +20,12 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])->group(function (
 
     Route::get('apps/bestellungen/settings/user', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Settings\User::class)
         ->name('apps.bestellungen.settings.user');
+
+    Route::get('apps/bestellungen/projekte', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Projekte\Index::class)
+        ->name('apps.bestellungen.projekte.index');
+
+    Route::get('apps/bestellungen/projekte/{projekt}', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Projekte\Detail::class)
+        ->name('apps.bestellungen.projekte.detail');
 });
 
 Route::middleware(['web', 'auth', 'can:manage-app-bestellungen'])->group(function (): void {

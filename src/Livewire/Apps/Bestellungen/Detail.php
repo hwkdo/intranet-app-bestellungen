@@ -94,7 +94,7 @@ class Detail extends Component
 
     public function mount(Bestellung $bestellung): void
     {
-        $this->bestellung = $bestellung->load(['user', 'freigeber', 'besteller', 'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user']);
+        $this->bestellung = $bestellung->load(['user', 'freigeber', 'besteller', 'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user', 'projekt']);
 
         if ($this->aktionParam === 'freigeben' && $this->kannFreigeben()) {
             Flux::modal('freigeben-modal')->show();

@@ -88,6 +88,11 @@ class Bestellung extends Model
         return $this->belongsTo(self::class, 'wiederholt_von_id');
     }
 
+    public function projekt(): BelongsTo
+    {
+        return $this->belongsTo(Projekt::class, 'projekt_id');
+    }
+
     public function scopeFreigabePending(Builder $query): Builder
     {
         return $query->whereIn('status', [

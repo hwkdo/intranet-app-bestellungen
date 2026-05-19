@@ -343,6 +343,20 @@
             <flux:card>
                 <flux:heading size="lg" class="mb-3">Stammdaten</flux:heading>
                 <dl class="space-y-2 text-sm">
+                    @if ($bestellung->projekt)
+                        <div>
+                            <dt class="text-zinc-500">Projekt</dt>
+                            <dd>
+                                <a
+                                    href="{{ route('apps.bestellungen.projekte.detail', $bestellung->projekt) }}"
+                                    wire:navigate
+                                    class="text-blue-600 hover:underline dark:text-blue-400"
+                                >
+                                    {{ $bestellung->projekt->name }}
+                                </a>
+                            </dd>
+                        </div>
+                    @endif
                     <div>
                         <dt class="text-zinc-500">Lieferant</dt>
                         <dd>{{ $bestellung->lieferantenname }} ({{ $bestellung->lieferantennummer }})</dd>

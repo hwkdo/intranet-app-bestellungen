@@ -9,6 +9,7 @@
         ['label' => 'Übersicht', 'href' => route('apps.bestellungen.index'), 'icon' => 'home', 'description' => 'Zurück zur Übersicht', 'buttonText' => 'Übersicht anzeigen'],
         ['label' => 'Neue Bestellung', 'href' => route('apps.bestellungen.erstellen'), 'icon' => 'plus-circle', 'description' => 'Neue Bestellung anlegen', 'buttonText' => 'Bestellung erstellen'],
         ['label' => 'Meine Bestellungen', 'href' => route('apps.bestellungen.meine'), 'icon' => 'document-text', 'description' => 'Meine Bestellungen anzeigen', 'buttonText' => 'Meine Bestellungen'],
+        ['label' => 'Projekte', 'href' => route('apps.bestellungen.projekte.index'), 'icon' => 'folder', 'description' => 'Bestellungen in Projekten bündeln', 'buttonText' => 'Projekte öffnen'],
         ['label' => 'Freigaben', 'href' => route('apps.bestellungen.freigaben'), 'icon' => 'check-badge', 'description' => 'Bestellungen zur Freigabe', 'buttonText' => 'Freigaben öffnen'],
         ['label' => 'Meine Einstellungen', 'href' => route('apps.bestellungen.settings.user'), 'icon' => 'cog-6-tooth', 'description' => 'Persönliche Einstellungen anpassen', 'buttonText' => 'Einstellungen öffnen'],
         ['label' => 'Admin', 'href' => route('apps.bestellungen.admin.index'), 'icon' => 'shield-check', 'description' => 'Administrationsbereich verwalten', 'buttonText' => 'Admin öffnen', 'permission' => 'manage-app-bestellungen'],

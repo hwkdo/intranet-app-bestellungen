@@ -16,6 +16,7 @@ use Hwkdo\IntranetAppBestellungen\Models\KostenstelleCache;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantNutzung;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
+use Hwkdo\IntranetAppBestellungen\Models\Projekt;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
@@ -29,6 +30,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -67,6 +69,9 @@ class Erstellen extends Component
 
     /** @var array<int, string> */
     public array $d3GruppenOptionen = [];
+
+    #[Url(as: 'projekt')]
+    public ?int $projektId = null;
 
     public string $lieferantSearch = '';
 
@@ -164,6 +169,18 @@ class Erstellen extends Component
             ->orderBy('nachname')
             ->orderBy('vorname')
             ->get();
+    }
+
+    #[Computed]
+    public function userHasProjekte(): bool
+    {
+        return Projekt::query()->forUser(Auth::id())->exists();
+    }
+
+    #[Computed]
+    public function projektSuggestions(): Collection
+    {
+        return Projekt::query()->forUser(Auth::id())->orderBy('name')->get();
     }
 
     /**
@@ -362,6 +379,7 @@ class Erstellen extends Component
                 'gruppen' => $this->normalizeD3GruppenAuswahl(),
                 'lieferanschrift_user_id' => $lieferanschriftUser?->getKey(),
                 'user_id' => Auth::id(),
+                'projekt_id' => $this->projektId,
                 'gesamtbetrag' => $this->gesamtbetrag(),
             ]);
 
