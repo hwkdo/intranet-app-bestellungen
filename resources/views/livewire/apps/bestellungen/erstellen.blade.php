@@ -97,7 +97,8 @@
                     <flux:input
                         wire:model="lieferantenname"
                         label="Lieferantenname"
-                        placeholder="z. B. Musterfirma GmbH"
+                        placeholder="Wird durch Lieferantenauswahl befüllt"
+                        readonly
                     />
 
                     <flux:field>
