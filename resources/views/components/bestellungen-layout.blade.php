@@ -12,6 +12,7 @@
         ['label' => 'Projekte', 'href' => route('apps.bestellungen.projekte.index'), 'icon' => 'folder', 'description' => 'Bestellungen in Projekten bündeln', 'buttonText' => 'Projekte öffnen'],
         ['label' => 'Freigaben', 'href' => route('apps.bestellungen.freigaben'), 'icon' => 'check-badge', 'description' => 'Bestellungen zur Freigabe', 'buttonText' => 'Freigaben öffnen'],
         ['label' => 'Meine Einstellungen', 'href' => route('apps.bestellungen.settings.user'), 'icon' => 'cog-6-tooth', 'description' => 'Persönliche Einstellungen anpassen', 'buttonText' => 'Einstellungen öffnen'],
+        ['label' => 'App-Info', 'href' => route('apps.bestellungen.info'), 'icon' => 'information-circle', 'description' => 'Installierte Version und Release-Historie', 'buttonText' => 'App-Info anzeigen'],
         ['label' => 'Admin', 'href' => route('apps.bestellungen.admin.index'), 'icon' => 'shield-check', 'description' => 'Administrationsbereich verwalten', 'buttonText' => 'Admin öffnen', 'permission' => 'manage-app-bestellungen'],
     ];
 
