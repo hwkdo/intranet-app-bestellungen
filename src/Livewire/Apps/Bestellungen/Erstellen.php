@@ -97,6 +97,40 @@ class Erstellen extends Component
         $this->lieferanschriftUserId = Auth::id();
 
         $this->loadD3GruppenAuswahl();
+        $this->applyProjektBegruendungPrefill();
+    }
+
+    public function updatedProjektId(?int $projektId): void
+    {
+        $this->applyProjektBegruendungPrefill();
+    }
+
+    private function applyProjektBegruendungPrefill(): void
+    {
+        if ($this->projektId === null) {
+            return;
+        }
+
+        $projekt = Projekt::query()
+            ->forUser((int) Auth::id())
+            ->find($this->projektId);
+
+        if (! $projekt || ! filled($projekt->begruendung)) {
+            return;
+        }
+
+        $this->begruendung = (string) $projekt->begruendung;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function messages(): array
+    {
+        return [
+            'begruendung.required' => 'Bitte geben Sie eine Begründung für die Bestellung an.',
+            'begruendung.min' => 'Die Begründung muss mindestens 10 Zeichen lang sein.',
+        ];
     }
 
     public function rules(): array
@@ -111,7 +145,7 @@ class Erstellen extends Component
             ],
             'haushaltsjahr' => ['required', 'integer', 'min:2000', 'max:2100'],
             'betreff' => ['nullable', 'string', 'max:255'],
-            'begruendung' => ['nullable', 'string'],
+            'begruendung' => ['required', 'string', 'min:10'],
             'positionen' => ['required', 'array', 'min:1'],
             'positionen.*.bezeichnung' => ['required', 'string', 'max:255'],
             'positionen.*.menge' => ['required', 'numeric', 'min:0.01'],

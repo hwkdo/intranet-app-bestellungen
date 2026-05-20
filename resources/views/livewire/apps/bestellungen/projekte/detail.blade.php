@@ -30,6 +30,36 @@
             </flux:card>
         </div>
 
+        {{-- Begründung --}}
+        <flux:card class="mb-6">
+            <flux:heading size="lg" class="mb-3">Begründung</flux:heading>
+            <flux:text class="text-zinc-500 text-sm mb-3">
+                Wird beim Erstellen einer Bestellung in diesem Projekt als Vorgabe in das Begründungsfeld übernommen und kann dort angepasst werden.
+            </flux:text>
+
+            @if ($this->istErsteller())
+                <flux:textarea
+                    wire:model="begruendung"
+                    label="Projekt-Begründung"
+                    rows="4"
+                    required
+                />
+                <flux:error name="begruendung" />
+                <div class="flex justify-end mt-3">
+                    <flux:button
+                        variant="primary"
+                        wire:click="begruendungSpeichern"
+                        wire:loading.attr="disabled"
+                        icon="check"
+                    >
+                        Begründung speichern
+                    </flux:button>
+                </div>
+            @else
+                <div class="text-sm whitespace-pre-wrap">{{ $projekt->begruendung ?: '—' }}</div>
+            @endif
+        </flux:card>
+
         {{-- Bestellungen --}}
         <flux:card class="mb-6">
             <flux:heading size="lg" class="mb-3">Bestellungen</flux:heading>

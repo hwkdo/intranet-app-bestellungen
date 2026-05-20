@@ -194,10 +194,12 @@
                     <flux:textarea
                         wire:model="begruendung"
                         label="Begründung"
-                        placeholder="Optional: Hintergrund / Kontext der Bestellung"
+                        placeholder="Hintergrund und Kontext der Bestellung für den Freigeber"
                         rows="3"
                         class="md:col-span-2"
+                        required
                     />
+                    <flux:error name="begruendung" class="md:col-span-2" />
 
                     <flux:field class="md:col-span-2">
                         <flux:label>D3 - Gruppen</flux:label>

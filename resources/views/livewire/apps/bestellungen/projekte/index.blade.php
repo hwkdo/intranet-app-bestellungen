@@ -73,6 +73,15 @@
                     rows="3"
                 />
                 <flux:error name="beschreibung" />
+
+                <flux:textarea
+                    wire:model="begruendung"
+                    label="Begründung"
+                    placeholder="Fachliche Begründung für alle Bestellungen in diesem Projekt…"
+                    rows="4"
+                    required
+                />
+                <flux:error name="begruendung" />
             </div>
 
             <div class="flex gap-2 justify-end mt-6">

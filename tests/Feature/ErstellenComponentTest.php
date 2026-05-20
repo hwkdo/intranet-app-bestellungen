@@ -46,6 +46,7 @@ it('legt eine Bestellung mit Position an und reicht sie ein', function (): void 
         ->set('kostenstelle', '4711')
         ->set('haushaltsjahr', 2026)
         ->set('betreff', 'Testbestellung')
+        ->set('begruendung', 'Begründung für die Testbestellung im Rahmen des Bedarfs.')
         ->set('positionen', [[
             'nr' => 1,
             'art_id' => null,
@@ -67,4 +68,28 @@ it('legt eine Bestellung mit Position an und reicht sie ein', function (): void 
     expect((float) $bestellung->gesamtbetrag)->toEqual(7.50);
     expect($bestellung->positionen)->toHaveCount(1);
     expect($bestellung->positionen->first()?->hasPositionPdf())->toBeTrue();
+    expect($bestellung->begruendung)->toContain('Begründung für die Testbestellung');
+});
+
+it('verlangt eine Begründung beim Erstellen einer Bestellung', function (): void {
+    $user = User::factory()->create();
+
+    Livewire::actingAs($user)
+        ->test(Erstellen::class)
+        ->set('lieferantennummer', '12345')
+        ->set('lieferantenname', 'Test GmbH')
+        ->set('kostenstelle', '4711')
+        ->set('haushaltsjahr', 2026)
+        ->set('positionen', [[
+            'nr' => 1,
+            'art_id' => null,
+            'art_nr' => null,
+            'oberbegriff' => null,
+            'bezeichnung' => 'Bleistift',
+            'menge' => 1,
+            'einheit' => 'Stk',
+            'preis' => 1.00,
+        ]])
+        ->call('speichern')
+        ->assertHasErrors(['begruendung']);
 });

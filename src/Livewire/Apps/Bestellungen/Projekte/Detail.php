@@ -19,11 +19,14 @@ class Detail extends Component
 {
     public Projekt $projekt;
 
+    public string $begruendung = '';
+
     public ?int $mitgliedUserId = null;
 
     public function mount(Projekt $projekt): void
     {
         $this->projekt = $projekt->load(['ersteller', 'mitglieder']);
+        $this->begruendung = (string) ($this->projekt->begruendung ?? '');
 
         abort_unless(
             $this->projekt->istMitgliedOderErsteller(Auth::id()),
@@ -64,6 +67,23 @@ class Detail extends Component
     public function istErsteller(): bool
     {
         return $this->projekt->user_id === Auth::id();
+    }
+
+    public function begruendungSpeichern(): void
+    {
+        abort_unless($this->istErsteller(), 403);
+
+        $this->validate([
+            'begruendung' => ['required', 'string', 'min:10'],
+        ], [
+            'begruendung.required' => 'Bitte geben Sie eine Begründung für das Projekt an.',
+            'begruendung.min' => 'Die Begründung muss mindestens 10 Zeichen lang sein.',
+        ]);
+
+        $this->projekt->update(['begruendung' => $this->begruendung]);
+        $this->projekt->refresh();
+
+        Flux::toast(text: 'Projekt-Begründung wurde gespeichert.', variant: 'success');
     }
 
     public function mitgliedHinzufuegen(): void

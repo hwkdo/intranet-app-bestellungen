@@ -18,20 +18,27 @@ class Index extends Component
 
     public string $beschreibung = '';
 
+    public string $begruendung = '';
+
     public function erstellen(): void
     {
         $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'beschreibung' => ['nullable', 'string', 'max:1000'],
+            'begruendung' => ['required', 'string', 'min:10'],
+        ], [
+            'begruendung.required' => 'Bitte geben Sie eine Begründung für das Projekt an.',
+            'begruendung.min' => 'Die Begründung muss mindestens 10 Zeichen lang sein.',
         ]);
 
         Projekt::create([
             'name' => $this->name,
             'beschreibung' => $this->beschreibung ?: null,
+            'begruendung' => $this->begruendung,
             'user_id' => Auth::id(),
         ]);
 
-        $this->reset('name', 'beschreibung');
+        $this->reset('name', 'beschreibung', 'begruendung');
 
         Flux::modal('projekt-erstellen')->close();
 

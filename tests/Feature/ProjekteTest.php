@@ -71,12 +71,24 @@ it('legt ein neues Projekt an', function (): void {
         ->test(Index::class)
         ->set('name', 'Neues Projekt')
         ->set('beschreibung', 'Eine Beschreibung')
+        ->set('begruendung', 'Gemeinsame fachliche Begründung für alle Bestellungen in diesem Projekt.')
         ->call('erstellen');
 
     $projekt = Projekt::query()->where('name', 'Neues Projekt')->first();
     expect($projekt)->not->toBeNull();
     expect($projekt->user_id)->toBe($user->id);
     expect($projekt->beschreibung)->toBe('Eine Beschreibung');
+    expect($projekt->begruendung)->toContain('Gemeinsame fachliche Begründung');
+});
+
+it('verlangt eine Begründung beim Anlegen eines Projekts', function (): void {
+    $user = User::factory()->create();
+
+    Livewire::actingAs($user)
+        ->test(Index::class)
+        ->set('name', 'Ohne Begründung')
+        ->call('erstellen')
+        ->assertHasErrors(['begruendung']);
 });
 
 it('zeigt die Projektdetails nur für Ersteller und Mitglieder', function (): void {
@@ -154,11 +166,26 @@ it('entfernt ein Mitglied aus dem Projekt', function (): void {
     expect($projekt->mitglieder()->where('user_id', $mitglied->id)->exists())->toBeFalse();
 });
 
+it('füllt die Begründung beim Erstellen aus der Projekt-Begründung vor', function (): void {
+    $user = User::factory()->create();
+    $projekt = Projekt::factory()->create([
+        'user_id' => $user->id,
+        'begruendung' => 'Standardbegründung für das IT-Ausstattungsprojekt 2026.',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Erstellen::class, ['projekt' => $projekt->id])
+        ->assertSet('begruendung', 'Standardbegründung für das IT-Ausstattungsprojekt 2026.');
+});
+
 it('speichert die Projekt-ID beim Erstellen einer Bestellung', function (): void {
     \Illuminate\Support\Facades\Storage::fake('public');
 
     $user = User::factory()->create();
-    $projekt = Projekt::factory()->create(['user_id' => $user->id]);
+    $projekt = Projekt::factory()->create([
+        'user_id' => $user->id,
+        'begruendung' => 'Begründung für alle Bestellungen in diesem Projekt.',
+    ]);
 
     Livewire::actingAs($user)
         ->test(Erstellen::class, ['projekt' => $projekt->id])
@@ -183,4 +210,20 @@ it('speichert die Projekt-ID beim Erstellen einer Bestellung', function (): void
     $bestellung = Bestellung::query()->where('betreff', 'Projektbestellung')->first();
     expect($bestellung)->not->toBeNull();
     expect($bestellung->projekt_id)->toBe($projekt->id);
+    expect($bestellung->begruendung)->toBe('Begründung für alle Bestellungen in diesem Projekt.');
+});
+
+it('erlaubt dem Ersteller die Projekt-Begründung zu bearbeiten', function (): void {
+    $ersteller = User::factory()->create();
+    $projekt = Projekt::factory()->create([
+        'user_id' => $ersteller->id,
+        'begruendung' => 'Ursprüngliche Projektbegründung für Freigaben.',
+    ]);
+
+    Livewire::actingAs($ersteller)
+        ->test(Detail::class, ['projekt' => $projekt])
+        ->set('begruendung', 'Aktualisierte Projektbegründung für künftige Bestellungen.')
+        ->call('begruendungSpeichern');
+
+    expect($projekt->fresh()->begruendung)->toBe('Aktualisierte Projektbegründung für künftige Bestellungen.');
 });

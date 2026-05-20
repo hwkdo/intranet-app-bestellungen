@@ -20,6 +20,7 @@ class ProjektFactory extends Factory
         return [
             'name' => fake()->words(3, true),
             'beschreibung' => fake()->optional()->sentence(),
+            'begruendung' => fake()->paragraph(),
             'user_id' => User::factory(),
         ];
     }
