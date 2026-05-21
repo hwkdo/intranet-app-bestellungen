@@ -17,9 +17,11 @@ use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantNutzung;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
 use Hwkdo\IntranetAppBestellungen\Models\Projekt;
+use Hwkdo\IntranetAppBestellungen\Http\Requests\MeldeFehlendenLieferantRequest;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
+use Hwkdo\IntranetAppBestellungen\Services\Lieferant\FehlenderLieferantMeldungService;
 use Hwkdo\IntranetAppBestellungen\Services\Stammdaten\StammdatenSyncService;
 use Hwkdo\IntranetAppBestellungen\Support\D3GruppenOptionSort;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
@@ -73,6 +75,14 @@ class Erstellen extends Component
     public ?int $projektId = null;
 
     public string $lieferantSearch = '';
+
+    public string $fehlenderLieferantName = '';
+
+    public string $fehlenderLieferantAdresse = '';
+
+    public string $fehlenderLieferantIban = '';
+
+    public string $fehlenderLieferantWebseite = '';
 
     public string $kostenstelleSearch = '';
 
@@ -374,10 +384,84 @@ class Erstellen extends Component
             return;
         }
 
+        $this->fillLieferantennameFromCache($nummer);
+    }
+
+    public function meldeFehlendenLieferant(): void
+    {
+        $this->validate(
+            MeldeFehlendenLieferantRequest::livewireValidationRules(),
+            MeldeFehlendenLieferantRequest::validationMessages(),
+            MeldeFehlendenLieferantRequest::validationAttributes(),
+        );
+
+        try {
+            app(FehlenderLieferantMeldungService::class)->send(
+                Auth::user(),
+                $this->fehlenderLieferantName,
+                $this->fehlenderLieferantAdresse ?: null,
+                $this->fehlenderLieferantIban ?: null,
+                $this->fehlenderLieferantWebseite ?: null,
+            );
+        } catch (\Throwable $e) {
+            Flux::toast(
+                heading: 'Fehler',
+                text: $e->getMessage(),
+                variant: 'error',
+            );
+
+            return;
+        }
+
+        $this->wendeUnbekanntenLieferantenAn();
+        $this->resetFehlenderLieferantModal();
+        Flux::modal('fehlender-lieferant')->close();
+        Flux::toast(
+            text: 'Fehlender Lieferant erfolgreich gemeldet',
+            variant: 'success',
+        );
+    }
+
+    private function wendeUnbekanntenLieferantenAn(): void
+    {
+        $nummer = IntranetAppBestellungenSettings::resolvedAppSettings()->unbekannterLieferantennummer;
+        $this->lieferantennummer = $nummer;
+
+        $lieferant = LieferantCache::query()->where('lieferantennummer', $nummer)->first();
+
+        if ($lieferant) {
+            $this->lieferantenname = $lieferant->lieferantenname;
+
+            return;
+        }
+
+        Log::warning('Platzhalter-Lieferant nicht im Stammdaten-Cache', ['lieferantennummer' => $nummer]);
+        $this->lieferantenname = 'Unbekannter Lieferant';
+    }
+
+    private function resetFehlenderLieferantModal(): void
+    {
+        $this->fehlenderLieferantName = '';
+        $this->fehlenderLieferantAdresse = '';
+        $this->fehlenderLieferantIban = '';
+        $this->fehlenderLieferantWebseite = '';
+    }
+
+    private function fillLieferantennameFromCache(string $nummer): void
+    {
         $lieferant = LieferantCache::query()->where('lieferantennummer', $nummer)->first();
         if ($lieferant) {
             $this->lieferantenname = $lieferant->lieferantenname;
         }
+    }
+
+    private function ensureLieferantennameFromCache(): void
+    {
+        if (! filled($this->lieferantennummer) || filled($this->lieferantenname)) {
+            return;
+        }
+
+        $this->fillLieferantennameFromCache($this->lieferantennummer);
     }
 
     /**
@@ -425,6 +509,7 @@ class Erstellen extends Component
     public function speichern(): void
     {
         $this->normalizePdfPositionen();
+        $this->ensureLieferantennameFromCache();
         $this->validate();
 
         foreach ($this->positionen as $idx => $position) {

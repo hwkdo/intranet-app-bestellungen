@@ -134,12 +134,13 @@
                         <flux:error name="lieferantennummer" />
                     </flux:field>
 
-                    <flux:input
-                        wire:model="lieferantenname"
-                        label="Lieferantenname"
-                        placeholder="Wird durch Lieferantenauswahl befüllt"
-                        readonly
-                    />
+                    <div class="flex items-end">
+                        <flux:modal.trigger name="fehlender-lieferant">
+                            <flux:button variant="outline" class="w-full">
+                                Lieferant fehlt
+                            </flux:button>
+                        </flux:modal.trigger>
+                    </div>
 
                     <livewire:intranet-app-bestellungen::apps.bestellungen.erstellen-projekt-select wire:model="projektId" />
 
@@ -540,4 +541,61 @@
             </div>
         </form>
     </x-intranet-app-bestellungen::bestellungen-layout>
+
+    <flux:modal name="fehlender-lieferant" class="max-w-lg">
+        <flux:heading size="lg">Lieferant fehlt</flux:heading>
+        <flux:text class="mt-1 mb-4">
+            Melden Sie einen fehlenden Lieferanten. Die Buchhaltung wird informiert und ein Platzhalter-Lieferant wird für diese Bestellung gesetzt.
+        </flux:text>
+
+        <div class="space-y-4">
+            <flux:input
+                wire:model="fehlenderLieferantName"
+                label="Name"
+                placeholder="Name des Lieferanten"
+                required
+            />
+            <flux:error name="fehlenderLieferantName" />
+
+            <flux:textarea
+                wire:model="fehlenderLieferantAdresse"
+                label="Adresse"
+                placeholder="Straße, PLZ Ort"
+                rows="3"
+            />
+            <flux:error name="fehlenderLieferantAdresse" />
+
+            <flux:input
+                wire:model="fehlenderLieferantIban"
+                label="IBAN"
+                placeholder="DE…"
+            />
+            <flux:error name="fehlenderLieferantIban" />
+
+            <flux:input
+                wire:model="fehlenderLieferantWebseite"
+                label="Webseite"
+                placeholder="https://…"
+            />
+            <flux:error name="fehlenderLieferantWebseite" />
+        </div>
+
+        <div class="flex gap-2 justify-end mt-6">
+            <flux:modal.close>
+                <flux:button variant="ghost">Abbrechen</flux:button>
+            </flux:modal.close>
+            <flux:button
+                variant="primary"
+                wire:click="meldeFehlendenLieferant"
+                wire:loading.attr="disabled"
+                wire:target="meldeFehlendenLieferant"
+            >
+                <span wire:loading.remove wire:target="meldeFehlendenLieferant">Melden</span>
+                <span wire:loading wire:target="meldeFehlendenLieferant" class="inline-flex items-center gap-2">
+                    <flux:icon name="arrow-path" class="size-4 animate-spin" />
+                    Wird gesendet…
+                </span>
+            </flux:button>
+        </div>
+    </flux:modal>
 </div>

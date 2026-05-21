@@ -162,6 +162,12 @@ class AppSettings extends BaseAppSettings
 
         #[Description('Cache-TTL in Stunden für D3 SOAP Abruf aller D3-Gruppen (UI-Performance)')]
         public int $d3SoapAllGroupsCacheTtlStunden = 24,
+
+        #[Description('Lieferantennummer des Platzhalter-Lieferanten nach Meldung „Lieferant fehlt“ (Legacy: 7000720)')]
+        public string $unbekannterLieferantennummer = '7000720',
+
+        #[Description('E-Mail-Empfänger für Meldungen „Lieferant fehlt“ (Legacy: Rechnungswesen / ticketkategorien.email)')]
+        public string $fehlenderLieferantEmpfaengerEmail = 'rechnungswesen@hwk-do.de',
     ) {}
 
     /**
