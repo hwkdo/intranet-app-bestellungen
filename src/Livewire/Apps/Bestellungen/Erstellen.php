@@ -21,6 +21,7 @@ use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\Stammdaten\StammdatenSyncService;
+use Hwkdo\IntranetAppBestellungen\Support\D3GruppenOptionSort;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
@@ -30,7 +31,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
-use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -70,7 +70,6 @@ class Erstellen extends Component
     /** @var array<int, string> */
     public array $d3GruppenOptionen = [];
 
-    #[Url(as: 'projekt')]
     public ?int $projektId = null;
 
     public string $lieferantSearch = '';
@@ -97,7 +96,37 @@ class Erstellen extends Component
         $this->lieferanschriftUserId = Auth::id();
 
         $this->loadD3GruppenAuswahl();
+        $this->resolveProjektIdFromRequest();
         $this->applyProjektBegruendungPrefill();
+    }
+
+    /**
+     * Projekt nur übernehmen, wenn die Erstellen-URL explizit ?projekt= enthält
+     * (z. B. Button „Bestellung erstellen“ auf der Projektdetailseite).
+     */
+    private function resolveProjektIdFromRequest(): void
+    {
+        $this->projektId = null;
+
+        if (! request()->filled('projekt')) {
+            return;
+        }
+
+        $query = request()->query('projekt');
+
+        $id = (int) $query;
+        if ($id <= 0) {
+            return;
+        }
+
+        $exists = Projekt::query()
+            ->forUser((int) Auth::id())
+            ->whereKey($id)
+            ->exists();
+
+        if ($exists) {
+            $this->projektId = $id;
+        }
     }
 
     public function updatedProjektId(?int $projektId): void
@@ -146,6 +175,24 @@ class Erstellen extends Component
             'haushaltsjahr' => ['required', 'integer', 'min:2000', 'max:2100'],
             'betreff' => ['nullable', 'string', 'max:255'],
             'begruendung' => ['required', 'string', 'min:10'],
+            'projektId' => [
+                'nullable',
+                'integer',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+
+                    $exists = Projekt::query()
+                        ->forUser((int) Auth::id())
+                        ->whereKey((int) $value)
+                        ->exists();
+
+                    if (! $exists) {
+                        $fail('Das gewählte Projekt ist nicht verfügbar.');
+                    }
+                },
+            ],
             'positionen' => ['required', 'array', 'min:1'],
             'positionen.*.bezeichnung' => ['required', 'string', 'max:255'],
             'positionen.*.menge' => ['required', 'numeric', 'min:0.01'],
@@ -172,7 +219,13 @@ class Erstellen extends Component
 
     public function addKontierung(): void
     {
-        $this->kontierung[] = $this->emptyKontierung();
+        $zeile = $this->emptyKontierung();
+
+        if (count($this->kontierung) >= 1) {
+            $zeile['aufteilung'] = 0.0;
+        }
+
+        $this->kontierung[] = $zeile;
     }
 
     public function removeKontierung(int $idx): void
@@ -205,16 +258,15 @@ class Erstellen extends Component
             ->get();
     }
 
+    /**
+     * D3-Gruppen für die Listbox: aktuell ausgewählte Einträge oben (leichteres Abwählen).
+     *
+     * @return array<int, string>
+     */
     #[Computed]
-    public function userHasProjekte(): bool
+    public function d3GruppenOptionenSortiert(): array
     {
-        return Projekt::query()->forUser(Auth::id())->exists();
-    }
-
-    #[Computed]
-    public function projektSuggestions(): Collection
-    {
-        return Projekt::query()->forUser(Auth::id())->orderBy('name')->get();
+        return D3GruppenOptionSort::mitAuswahlZuerst($this->d3GruppenOptionen, $this->d3GruppenAuswahl);
     }
 
     /**

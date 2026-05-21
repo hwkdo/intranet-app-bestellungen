@@ -39,9 +39,49 @@
         formatEuro(value) {
             return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
         },
+        kontierungPercents: {},
+        initKontierungPercents(kontierung) {
+            this.kontierungPercents = {};
+            kontierung.forEach((row, idx) => {
+                let p = Number(row?.aufteilung ?? 0);
+                if (Number.isNaN(p)) {
+                    p = 0;
+                }
+                this.kontierungPercents[idx] = p;
+            });
+        },
+        syncKontierungFromWire(kontierung) {
+            kontierung.forEach((row, idx) => {
+                if (this.kontierungPercents[idx] === undefined) {
+                    let p = Number(row?.aufteilung ?? 0);
+                    if (Number.isNaN(p)) {
+                        p = 0;
+                    }
+                    this.kontierungPercents[idx] = p;
+                }
+            });
+            Object.keys(this.kontierungPercents).forEach((key) => {
+                if (Number(key) >= kontierung.length) {
+                    delete this.kontierungPercents[key];
+                }
+            });
+        },
+        setKontierungPercent(idx, value) {
+            let p = Number(value ?? 0);
+            if (Number.isNaN(p)) {
+                p = 0;
+            }
+            this.kontierungPercents[idx] = p;
+        },
+        kontierungSumme() {
+            return Object.values(this.kontierungPercents).reduce((sum, val) => sum + Number(val || 0), 0);
+        },
+        formatPercent(value) {
+            return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
+        },
     }"
-    x-init="initRowTotals(@js($positionen))"
-    x-effect="syncFromWire($wire.positionen || [])"
+    x-init="initRowTotals(@js($positionen)); initKontierungPercents(@js($kontierung))"
+    x-effect="syncFromWire($wire.positionen || []); syncKontierungFromWire($wire.kontierung || [])"
 >
     <x-intranet-app-bestellungen::bestellungen-layout heading="Neue Bestellung" subheading="Bestellschein erfassen und zur Freigabe einreichen">
         <form wire:submit="speichern" class="space-y-6">
@@ -101,25 +141,7 @@
                         readonly
                     />
 
-                    @if ($this->userHasProjekte)
-                        <flux:field>
-                            <flux:label>Projekt <flux:badge size="sm" color="zinc" class="ml-1">Optional</flux:badge></flux:label>
-                            <flux:select
-                                wire:model.live="projektId"
-                                clearable
-                                placeholder="Kein Projekt"
-                            >
-                                @foreach ($this->projektSuggestions as $projektOption)
-                                    <flux:select.option
-                                        wire:key="proj-{{ $projektOption->id }}"
-                                        value="{{ $projektOption->id }}"
-                                    >
-                                        {{ $projektOption->name }}
-                                    </flux:select.option>
-                                @endforeach
-                            </flux:select>
-                        </flux:field>
-                    @endif
+                    <livewire:intranet-app-bestellungen::apps.bestellungen.erstellen-projekt-select wire:model="projektId" />
 
                     <flux:field>
                         <flux:label>Kostenstelle</flux:label>
@@ -188,30 +210,29 @@
                         wire:model="betreff"
                         label="Betreff"
                         placeholder="Kurzbeschreibung der Bestellung"
-                        class="md:col-span-2"
                     />
 
-                    <flux:textarea
-                        wire:model="begruendung"
-                        label="Begründung"
-                        placeholder="Hintergrund und Kontext der Bestellung für den Freigeber"
-                        rows="3"
-                        class="md:col-span-2"
-                        required
-                    />
-                    <flux:error name="begruendung" class="md:col-span-2" />
-
-                    <flux:field class="md:col-span-2">
+                    <flux:field>
                         <flux:label>D3 - Gruppen</flux:label>
-                        <flux:select wire:model="d3GruppenAuswahl" multiple variant="listbox">
-                            @foreach ($d3GruppenOptionen as $gruppe)
+                        <flux:select wire:model.live="d3GruppenAuswahl" multiple variant="listbox">
+                            @foreach ($this->d3GruppenOptionenSortiert as $gruppe)
                                 <flux:select.option value="{{ $gruppe }}">{{ $gruppe }}</flux:select.option>
                             @endforeach
                         </flux:select>
-                        <flux:text class="text-zinc-500 text-sm">Vorauswahl analog Legacy auf Basis der D3-Benutzergruppen.</flux:text>
                         <flux:error name="d3GruppenAuswahl" />
                         <flux:error name="d3GruppenAuswahl.*" />
                     </flux:field>
+
+                    <div class="md:col-span-2">
+                        <flux:textarea
+                            wire:model="begruendung"
+                            label="Begründung"
+                            placeholder="Hintergrund und Kontext der Bestellung für den Freigeber"
+                            rows="3"
+                            required
+                        />
+                        <flux:error name="begruendung" />
+                    </div>
                 </div>
             </flux:card>
 
@@ -226,7 +247,7 @@
 
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead class="text-xs uppercase tracking-wide text-zinc-500 border-b border-zinc-200 dark:border-zinc-700">
+                        <thead class="text-xs uppercase tracking-wide text-zinc-600 dark:text-white/70 border-b border-zinc-200 dark:border-zinc-700">
                             <tr>
                                 <th class="py-2 pr-2 text-left w-10">Nr.</th>
                                 <th class="py-2 px-2 text-left">Bezeichnung</th>
@@ -244,7 +265,7 @@
                                 @php($isPdfPosition = $this->isPdfPosition($idx))
                                 @php($zeilenSumme = (float) ($position['menge'] ?? 0) * (float) ($position['preis'] ?? 0))
                                 <tr wire:key="pos-{{ $idx }}" class="align-top">
-                                    <td class="py-2 pr-2 text-zinc-500">
+                                    <td class="py-2 pr-2 text-zinc-600 dark:text-white/70">
                                         {{ $idx + 1 }}
                                         @if ($isPdfPosition)
                                             <div class="mt-1">
@@ -254,7 +275,7 @@
                                     </td>
                                     <td class="py-2 px-2">
                                         @if ($isPdfPosition)
-                                            <span class="text-zinc-500 italic text-xs">Siehe PDF-Anlage</span>
+                                            <span class="text-zinc-600 dark:text-white/70 italic text-xs">Siehe PDF-Anlage</span>
                                         @else
                                             <flux:input
                                                 size="sm"
@@ -266,7 +287,7 @@
                                     </td>
                                     <td class="py-2 px-2">
                                         @if ($isPdfPosition)
-                                            <span class="text-zinc-400">—</span>
+                                            <span class="text-zinc-500 dark:text-white/50">—</span>
                                         @else
                                             <flux:input
                                                 size="sm"
@@ -278,7 +299,7 @@
                                     </td>
                                     <td class="py-2 px-2">
                                         @if ($isPdfPosition)
-                                            <span class="text-zinc-400">—</span>
+                                            <span class="text-zinc-500 dark:text-white/50">—</span>
                                         @else
                                             <flux:input
                                                 size="sm"
@@ -293,7 +314,7 @@
                                     </td>
                                     <td class="py-2 px-2">
                                         @if ($isPdfPosition)
-                                            <span class="text-zinc-400">—</span>
+                                            <span class="text-zinc-500 dark:text-white/50">—</span>
                                         @else
                                             <flux:input
                                                 size="sm"
@@ -305,7 +326,7 @@
                                     </td>
                                     <td class="py-2 px-2">
                                         @if ($isPdfPosition)
-                                            <span class="text-zinc-400">—</span>
+                                            <span class="text-zinc-500 dark:text-white/50">—</span>
                                         @else
                                             <flux:input
                                                 size="sm"
@@ -357,7 +378,7 @@
                                                 </div>
                                             @endif
                                         @else
-                                            <span class="text-zinc-400 text-xs">—</span>
+                                            <span class="text-zinc-500 dark:text-white/50 text-xs">—</span>
                                         @endif
                                     </td>
                                     <td class="py-2 pl-2 text-right">
@@ -379,7 +400,7 @@
 
                 <div class="mt-4 text-right">
                     <flux:heading size="md">
-                        Gesamt: <span class="text-emerald-600"><span x-text="formatEuro(total())"></span> €</span>
+                        Gesamt: <span class="text-emerald-600 dark:text-emerald-400"><span x-text="formatEuro(total())"></span> €</span>
                     </flux:heading>
                 </div>
             </flux:card>
@@ -388,85 +409,104 @@
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <flux:heading size="lg">Kontierung</flux:heading>
-                        <flux:text class="text-zinc-500 text-sm">Kostenstelle, Kursnummer, Verwendungsort und prozentuale Aufteilung. Summe sollte 100% ergeben.</flux:text>
+                        <flux:text class="text-sm">Kostenstelle, Kursnummer, Verwendungsort und prozentuale Aufteilung. Summe sollte 100% ergeben.</flux:text>
                     </div>
                     <flux:button type="button" size="sm" icon="plus" wire:click="addKontierung">Zeile hinzufügen</flux:button>
                 </div>
 
-                <div class="space-y-3">
-                    @foreach ($kontierung as $kIdx => $kontZeile)
-                        <div wire:key="kont-{{ $kIdx }}" class="grid gap-3 md:grid-cols-12 items-end border-b pb-3">
-                            <flux:field class="md:col-span-3">
-                                <flux:label>Kostenstelle</flux:label>
-                                <flux:select
-                                    variant="combobox"
-                                    wire:model="kontierung.{{ $kIdx }}.kostenstelle"
-                                    :filter="false"
-                                    clearable
-                                    placeholder="Kostenstelle wählen…"
-                                >
-                                    <x-slot name="input">
-                                        <flux:select.input
-                                            wire:model.live.debounce.250ms="kontierungSearch.{{ $kIdx }}"
-                                            placeholder="Suchen…"
-                                        />
-                                    </x-slot>
-
-                                    @foreach ($this->kostenstellenForKontierung($kIdx) as $kst)
-                                        <flux:select.option
-                                            wire:key="kont-{{ $kIdx }}-kst-{{ $kst->kostenstelle }}"
-                                            value="{{ $kst->kostenstelle }}"
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="text-xs uppercase tracking-wide text-zinc-600 dark:text-white/70 border-b border-zinc-200 dark:border-zinc-700">
+                            <tr>
+                                <th class="py-2 px-2 text-left">Kostenstelle</th>
+                                <th class="py-2 px-2 text-left w-48">Kursnummer</th>
+                                <th class="py-2 px-2 text-left w-56">Verw.-Ort / Raum</th>
+                                <th class="py-2 px-2 text-right w-28">% Aufteilung</th>
+                                <th class="py-2 pl-2 w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                            @foreach ($kontierung as $kIdx => $kontZeile)
+                                <tr wire:key="kont-{{ $kIdx }}" class="align-top">
+                                    <td class="py-2 px-2">
+                                        <flux:select
+                                            variant="combobox"
+                                            wire:model="kontierung.{{ $kIdx }}.kostenstelle"
+                                            :filter="false"
+                                            clearable
+                                            placeholder="Kostenstelle wählen…"
                                         >
-                                            {{ $kst->kostenstelle }} – {{ $kst->bezeichnung }}
-                                        </flux:select.option>
-                                    @endforeach
+                                            <x-slot name="input">
+                                                <flux:select.input
+                                                    wire:model.live.debounce.250ms="kontierungSearch.{{ $kIdx }}"
+                                                    placeholder="Suchen…"
+                                                />
+                                            </x-slot>
 
-                                    <x-slot name="empty">
-                                        <flux:select.option.empty when-loading="Suche läuft…">
-                                            Keine Kostenstellen gefunden.
-                                        </flux:select.option.empty>
-                                    </x-slot>
-                                </flux:select>
-                            </flux:field>
-                            <flux:input
-                                wire:model="kontierung.{{ $kIdx }}.kursnummer"
-                                label="Kursnummer"
-                                class="md:col-span-3"
-                            />
-                            <flux:input
-                                wire:model="kontierung.{{ $kIdx }}.raum"
-                                label="Verw.-Ort / Raum"
-                                class="md:col-span-3"
-                            />
-                            <flux:input
-                                wire:model.live="kontierung.{{ $kIdx }}.aufteilung"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                max="100"
-                                label="% Aufteilung"
-                                class="md:col-span-2"
-                            />
-                            <div class="md:col-span-1 flex justify-end">
-                                @if (count($kontierung) > 1)
-                                    <flux:button
-                                        type="button"
-                                        size="xs"
-                                        variant="ghost"
-                                        icon="trash"
-                                        wire:click="removeKontierung({{ $kIdx }})"
-                                    />
-                                @endif
-                            </div>
-                        </div>
-                    @endforeach
+                                            @foreach ($this->kostenstellenForKontierung($kIdx) as $kst)
+                                                <flux:select.option
+                                                    wire:key="kont-{{ $kIdx }}-kst-{{ $kst->kostenstelle }}"
+                                                    value="{{ $kst->kostenstelle }}"
+                                                >
+                                                    {{ $kst->kostenstelle }} – {{ $kst->bezeichnung }}
+                                                </flux:select.option>
+                                            @endforeach
+
+                                            <x-slot name="empty">
+                                                <flux:select.option.empty when-loading="Suche läuft…">
+                                                    Keine Kostenstellen gefunden.
+                                                </flux:select.option.empty>
+                                            </x-slot>
+                                        </flux:select>
+                                    </td>
+                                    <td class="py-2 px-2">
+                                        <flux:input
+                                            size="sm"
+                                            wire:model="kontierung.{{ $kIdx }}.kursnummer"
+                                            placeholder="Kursnummer"
+                                        />
+                                    </td>
+                                    <td class="py-2 px-2">
+                                        <flux:input
+                                            size="sm"
+                                            wire:model="kontierung.{{ $kIdx }}.raum"
+                                            placeholder="Verw.-Ort / Raum"
+                                        />
+                                    </td>
+                                    <td class="py-2 px-2">
+                                        <flux:input
+                                            size="sm"
+                                            wire:model.live.debounce.300ms="kontierung.{{ $kIdx }}.aufteilung"
+                                            x-on:input="setKontierungPercent({{ $kIdx }}, $event.target.value)"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            max="100"
+                                            class="text-right"
+                                        />
+                                    </td>
+                                    <td class="py-2 pl-2 text-right">
+                                        @if (count($kontierung) > 1)
+                                            <flux:button
+                                                type="button"
+                                                size="xs"
+                                                variant="ghost"
+                                                icon="trash"
+                                                wire:click="removeKontierung({{ $kIdx }})"
+                                            />
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 </div>
 
                 <div class="mt-3 text-right text-sm">
-                    Summe: <strong>{{ number_format($this->kontierungSummeProzent(), 2, ',', '.') }} %</strong>
-                    @if (abs($this->kontierungSummeProzent() - 100) > 0.01)
-                        <flux:badge size="sm" color="amber" class="ml-2">Nicht 100 %</flux:badge>
-                    @endif
+                    Summe: <strong><span x-text="formatPercent(kontierungSumme())"></span> %</strong>
+                    <span x-show="Math.abs(kontierungSumme() - 100) > 0.01" x-cloak class="ml-2 inline">
+                        <flux:badge size="sm" color="amber">Nicht 100 %</flux:badge>
+                    </span>
                 </div>
             </flux:card>
 

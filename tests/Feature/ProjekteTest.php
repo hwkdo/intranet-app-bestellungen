@@ -166,6 +166,23 @@ it('entfernt ein Mitglied aus dem Projekt', function (): void {
     expect($projekt->mitglieder()->where('user_id', $mitglied->id)->exists())->toBeFalse();
 });
 
+it('wählt standardmäßig kein Projekt vor', function (): void {
+    $user = User::factory()->create();
+    Projekt::factory()->create(['user_id' => $user->id, 'name' => 'Vorhandenes Projekt']);
+
+    Livewire::actingAs($user)
+        ->test(Erstellen::class)
+        ->assertSet('projektId', null);
+});
+
+it('blendet das Projektfeld aus wenn der Benutzer keine Projekte hat', function (): void {
+    $user = User::factory()->create();
+
+    Livewire::actingAs($user)
+        ->test(Erstellen::class)
+        ->assertDontSee('Kein Projekt');
+});
+
 it('füllt die Begründung beim Erstellen aus der Projekt-Begründung vor', function (): void {
     $user = User::factory()->create();
     $projekt = Projekt::factory()->create([
@@ -174,7 +191,9 @@ it('füllt die Begründung beim Erstellen aus der Projekt-Begründung vor', func
     ]);
 
     Livewire::actingAs($user)
-        ->test(Erstellen::class, ['projekt' => $projekt->id])
+        ->withQueryParams(['projekt' => (string) $projekt->id])
+        ->test(Erstellen::class)
+        ->assertSet('projektId', $projekt->id)
         ->assertSet('begruendung', 'Standardbegründung für das IT-Ausstattungsprojekt 2026.');
 });
 
@@ -188,7 +207,9 @@ it('speichert die Projekt-ID beim Erstellen einer Bestellung', function (): void
     ]);
 
     Livewire::actingAs($user)
-        ->test(Erstellen::class, ['projekt' => $projekt->id])
+        ->withQueryParams(['projekt' => (string) $projekt->id])
+        ->test(Erstellen::class)
+        ->assertSet('projektId', $projekt->id)
         ->set('lieferantennummer', '12345')
         ->set('lieferantenname', 'Test GmbH')
         ->set('kostenstelle', '4711')
