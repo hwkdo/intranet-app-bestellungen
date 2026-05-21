@@ -34,5 +34,9 @@ return [
             'name' => 'App-Bestellungen-In-Auftrag',
             'permissions' => [],
         ],
+        'interne_besteller' => [
+            'name' => 'App-Bestellungen-InterneBesteller',
+            'permissions' => [],
+        ],
     ],
 ];

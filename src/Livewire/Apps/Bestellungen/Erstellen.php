@@ -9,6 +9,7 @@ use Flux\Flux;
 use Hwkdo\D3RestLaravel\Facades\D3RestLaravel;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
+use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
 use Hwkdo\IntranetAppBestellungen\Models\Art;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
@@ -21,9 +22,12 @@ use Hwkdo\IntranetAppBestellungen\Http\Requests\MeldeFehlendenLieferantRequest;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
+use Hwkdo\IntranetAppBestellungen\Services\InterneBestellerService;
 use Hwkdo\IntranetAppBestellungen\Services\Lieferant\FehlenderLieferantMeldungService;
+use Hwkdo\IntranetAppBestellungen\Services\Lieferant\LieferantSuggestionsService;
 use Hwkdo\IntranetAppBestellungen\Services\Stammdaten\StammdatenSyncService;
 use Hwkdo\IntranetAppBestellungen\Support\D3GruppenOptionSort;
+use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
@@ -42,6 +46,10 @@ class Erstellen extends Component
     use WithFileUploads;
 
     private const HINWEIS_FREIGEBER_AUSWAHL = 'Es konnte kein eindeutiger Freigeber ermittel werden. Bitte Freigeber auswählen';
+
+    public string $typ;
+
+    public ?int $internerEmpfaengerUserId = null;
 
     public ?string $lieferantennummer = null;
 
@@ -91,8 +99,16 @@ class Erstellen extends Component
 
     private const SUGGEST_LIMIT = 30;
 
-    public function mount(): void
+    public function mount(string $typ): void
     {
+        if (! in_array($typ, [BestellungTyp::Intern->value, BestellungTyp::Extern->value], true)) {
+            $this->redirectRoute('apps.bestellungen.erstellen');
+
+            return;
+        }
+
+        $this->typ = $typ;
+
         app(StammdatenSyncService::class)->syncIfEmpty();
 
         $this->haushaltsjahr = (int) date('Y');
@@ -108,6 +124,21 @@ class Erstellen extends Component
         $this->loadD3GruppenAuswahl();
         $this->resolveProjektIdFromRequest();
         $this->applyProjektBegruendungPrefill();
+
+        if ($this->istInterneBestellung()) {
+            $this->wendePlatzhalterLieferantAn();
+        }
+    }
+
+    public function istInterneBestellung(): bool
+    {
+        return $this->typ === BestellungTyp::Intern->value;
+    }
+
+    private function wendePlatzhalterLieferantAn(): void
+    {
+        $this->lieferantennummer = PlatzhalterLieferant::nummer();
+        $this->fillLieferantennameFromCache($this->lieferantennummer);
     }
 
     /**
@@ -174,7 +205,31 @@ class Erstellen extends Component
 
     public function rules(): array
     {
+        $interneBestellerRolle = app(InterneBestellerService::class)->rollenName();
+
         return [
+            'internerEmpfaengerUserId' => [
+                Rule::requiredIf(fn (): bool => $this->istInterneBestellung()),
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where(fn ($query) => $query->where('active', true)),
+                function (string $attribute, mixed $value, \Closure $fail) use ($interneBestellerRolle): void {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+
+                    $user = User::query()->whereKey((int) $value)->first();
+                    if (! $user || ! $user->hasRole($interneBestellerRolle)) {
+                        $fail('Der gewählte interne Empfänger ist nicht gültig.');
+                    }
+                },
+            ],
+            'lieferantennummer' => [
+                Rule::requiredIf(fn (): bool => ! $this->istInterneBestellung()),
+                'nullable',
+                'string',
+                'max:50',
+            ],
             'lieferantenname' => ['required', 'string', 'max:255'],
             'kostenstelle' => ['required', 'string', 'max:50'],
             'lieferanschriftUserId' => [
@@ -249,7 +304,31 @@ class Erstellen extends Component
     #[Computed]
     public function lieferantenSuggestions(): Collection
     {
-        return $this->buildLieferantenQuery($this->lieferantSearch, $this->lieferantennummer);
+        return app(LieferantSuggestionsService::class)->suche($this->lieferantSearch, $this->lieferantennummer);
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    #[Computed]
+    public function interneEmpfaengerOptionen(): Collection
+    {
+        return app(InterneBestellerService::class)->mitglieder();
+    }
+
+    #[Computed]
+    public function userHasProjekte(): bool
+    {
+        return Projekt::query()->forUser((int) Auth::id())->exists();
+    }
+
+    /**
+     * @return Collection<int, Projekt>
+     */
+    #[Computed]
+    public function projektSuggestions(): Collection
+    {
+        return Projekt::query()->forUser((int) Auth::id())->orderBy('name')->get();
     }
 
     #[Computed]
@@ -540,6 +619,8 @@ class Erstellen extends Component
             $bestellung = Bestellung::create([
                 'nummer' => $nummer,
                 'status' => BestellungStatus::Entwurf,
+                'typ' => $this->typ,
+                'interner_empfaenger_user_id' => $this->istInterneBestellung() ? $this->internerEmpfaengerUserId : null,
                 'lieferantennummer' => $this->lieferantennummer,
                 'lieferantenname' => $this->lieferantenname,
                 'kostenstelle' => $this->kostenstelle,
@@ -651,40 +732,6 @@ class Erstellen extends Component
      * SUGGEST_LIMIT Einträge und stellt sicher, dass der aktuell gewählte
      * Lieferant immer im Ergebnis enthalten ist.
      */
-    private function buildLieferantenQuery(string $search, ?string $selected): Collection
-    {
-        $term = trim($search);
-
-        $results = LieferantCache::query()
-            ->leftJoin(
-                'intranet_app_bestellungen_lieferant_nutzung as ln',
-                'ln.lieferantennummer',
-                '=',
-                'intranet_app_bestellungen_lieferanten_cache.lieferantennummer'
-            )
-            ->select('intranet_app_bestellungen_lieferanten_cache.*')
-            ->when($term !== '', function ($q) use ($term): void {
-                $like = '%'.$term.'%';
-                $q->where(function ($inner) use ($like): void {
-                    $inner->where('lieferantenname', 'like', $like)
-                        ->orWhere('intranet_app_bestellungen_lieferanten_cache.lieferantennummer', 'like', $like);
-                });
-            })
-            ->orderByRaw('(COALESCE(ln.legacy_bestellungen_count, 0) + COALESCE(ln.v3_bestellungen_count, 0)) DESC')
-            ->orderBy('lieferantenname')
-            ->limit(self::SUGGEST_LIMIT)
-            ->get();
-
-        if ($selected && ! $results->firstWhere('lieferantennummer', $selected)) {
-            $row = LieferantCache::query()->where('lieferantennummer', $selected)->first();
-            if ($row) {
-                $results->prepend($row);
-            }
-        }
-
-        return $results;
-    }
-
     /**
      * Server-seitige Filterung der Kostenstellen. Stellt sicher, dass die
      * aktuell gewählte Kostenstelle immer im Ergebnis enthalten ist.

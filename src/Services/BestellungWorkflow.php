@@ -139,6 +139,7 @@ class BestellungWorkflow
     public function bestellen(Bestellung $bestellung, User $user, ?string $nachricht = null): Bestellung
     {
         $this->ensureStatus($bestellung, [BestellungStatus::Freigegeben]);
+        $this->ensureDarfBestellenAbschliessen($bestellung, $user);
 
         if (! IntranetAppBestellungenSettings::resolvedAppSettings()->autoPushBeiBestellt) {
             return DB::transaction(function () use ($bestellung, $user, $nachricht): Bestellung {
@@ -298,6 +299,31 @@ class BestellungWorkflow
             ];
         } catch (\Throwable) {
             return ['is_absent' => false, 'deputy' => null];
+        }
+    }
+
+    private function ensureDarfBestellenAbschliessen(Bestellung $bestellung, User $user): void
+    {
+        if ($bestellung->istIntern()) {
+            if ($bestellung->interner_empfaenger_user_id === null) {
+                throw new WorkflowException('Für interne Bestellungen ist kein interner Empfänger hinterlegt.');
+            }
+
+            if ((int) $bestellung->interner_empfaenger_user_id !== (int) $user->getKey()) {
+                throw new WorkflowException('Nur der interne Empfänger kann diese Bestellung abschließen und an D3 übergeben.');
+            }
+
+            if ($bestellung->benoetigtFinalenLieferantenVorD3()) {
+                throw new WorkflowException(
+                    'Bitte wählen Sie den tatsächlichen Lieferanten, bevor der Bestellschein nach D3 übertragen wird.',
+                );
+            }
+
+            return;
+        }
+
+        if (! $user->can('manage-app-bestellungen')) {
+            throw new WorkflowException('Sie sind nicht berechtigt, diese Bestellung als bestellt zu markieren.');
         }
     }
 }

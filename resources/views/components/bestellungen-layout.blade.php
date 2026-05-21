@@ -5,16 +5,31 @@
 ])
 
 @php
+    use Hwkdo\IntranetAppBestellungen\Services\InterneBestellerService;
+
     $defaultNavItems = [
         ['label' => 'Übersicht', 'href' => route('apps.bestellungen.index'), 'icon' => 'home', 'description' => 'Zurück zur Übersicht', 'buttonText' => 'Übersicht anzeigen'],
         ['label' => 'Neue Bestellung', 'href' => route('apps.bestellungen.erstellen'), 'icon' => 'plus-circle', 'description' => 'Neue Bestellung anlegen', 'buttonText' => 'Bestellung erstellen'],
         ['label' => 'Meine Bestellungen', 'href' => route('apps.bestellungen.meine'), 'icon' => 'document-text', 'description' => 'Meine Bestellungen anzeigen', 'buttonText' => 'Meine Bestellungen'],
         ['label' => 'Projekte', 'href' => route('apps.bestellungen.projekte.index'), 'icon' => 'folder', 'description' => 'Bestellungen in Projekten bündeln', 'buttonText' => 'Projekte öffnen'],
         ['label' => 'Freigaben', 'href' => route('apps.bestellungen.freigaben'), 'icon' => 'check-badge', 'description' => 'Bestellungen zur Freigabe', 'buttonText' => 'Freigaben öffnen'],
+    ];
+
+    if (auth()->check() && app(InterneBestellerService::class)->istMitglied(auth()->user())) {
+        $defaultNavItems[] = [
+            'label' => 'Interne Bestellungen',
+            'href' => route('apps.bestellungen.interne'),
+            'icon' => 'building-office-2',
+            'description' => 'Ihnen zugewiesene interne Bedarfsanforderungen bearbeiten',
+            'buttonText' => 'Interne Bestellungen öffnen',
+        ];
+    }
+
+    $defaultNavItems = array_merge($defaultNavItems, [
         ['label' => 'Meine Einstellungen', 'href' => route('apps.bestellungen.settings.user'), 'icon' => 'cog-6-tooth', 'description' => 'Persönliche Einstellungen anpassen', 'buttonText' => 'Einstellungen öffnen'],
         ['label' => 'App-Info', 'href' => route('apps.bestellungen.info'), 'icon' => 'information-circle', 'description' => 'Installierte Version und Release-Historie', 'buttonText' => 'App-Info anzeigen'],
         ['label' => 'Admin', 'href' => route('apps.bestellungen.admin.index'), 'icon' => 'shield-check', 'description' => 'Administrationsbereich verwalten', 'buttonText' => 'Admin öffnen', 'permission' => 'manage-app-bestellungen'],
-    ];
+    ]);
 
     $navItems = ! empty($navItems) ? $navItems : $defaultNavItems;
     $customBgUrl = \Hwkdo\IntranetAppBase\Models\AppBackground::getCustomBackgroundUrl('bestellungen');

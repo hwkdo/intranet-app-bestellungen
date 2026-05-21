@@ -81,9 +81,24 @@
         },
     }"
     x-init="initRowTotals(@js($positionen)); initKontierungPercents(@js($kontierung))"
-    x-effect="syncFromWire($wire.positionen || []); syncKontierungFromWire($wire.kontierung || [])"
+    x-effect="if ($wire?.id) { syncFromWire($wire.positionen || []); syncKontierungFromWire($wire.kontierung || []) }"
 >
-    <x-intranet-app-bestellungen::bestellungen-layout heading="Neue Bestellung" subheading="Bestellschein erfassen und zur Freigabe einreichen">
+    <x-intranet-app-bestellungen::bestellungen-layout
+        :heading="$this->istInterneBestellung() ? 'Interne Bestellung' : 'Externe Bestellung'"
+        subheading="Bestellschein erfassen und zur Freigabe einreichen"
+    >
+        <div class="mb-4">
+            <flux:button
+                variant="ghost"
+                icon="arrow-left"
+                size="sm"
+                :href="route('apps.bestellungen.erstellen', request()->filled('projekt') ? ['projekt' => request('projekt')] : [])"
+                wire:navigate
+            >
+                Art der Bestellung ändern
+            </flux:button>
+        </div>
+
         <form wire:submit="speichern" class="space-y-6">
             @if ($errors->any())
                 <flux:callout icon="exclamation-triangle" variant="danger">
@@ -100,49 +115,97 @@
                 <flux:heading size="lg" class="mb-4">Allgemeine Angaben</flux:heading>
 
                 <div class="grid gap-4 md:grid-cols-2">
-                    <flux:field>
-                        <flux:label>Lieferant</flux:label>
-                        <flux:select
-                            variant="combobox"
-                            wire:model.live="lieferantennummer"
-                            :filter="false"
-                            clearable
-                            placeholder="Lieferant wählen…"
-                        >
-                            <x-slot name="input">
-                                <flux:select.input
-                                    wire:model.live.debounce.250ms="lieferantSearch"
-                                    placeholder="Name oder Nummer eingeben…"
-                                />
-                            </x-slot>
+                    @if ($this->istInterneBestellung())
+                        <flux:field class="md:col-span-2">
+                            <flux:label>Interner Empfänger</flux:label>
+                            <flux:select
+                                wire:model="internerEmpfaengerUserId"
+                                variant="listbox"
+                                searchable
+                                placeholder="Mitarbeiter der Fachabteilung wählen…"
+                            >
+                                @foreach ($this->interneEmpfaengerOptionen as $empfaenger)
+                                    <flux:select.option
+                                        wire:key="emp-{{ $empfaenger->id }}"
+                                        value="{{ $empfaenger->id }}"
+                                    >
+                                        {{ $empfaenger->vorname }} {{ $empfaenger->nachname }}
+                                    </flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:error name="internerEmpfaengerUserId" />
+                        </flux:field>
 
-                            @foreach ($this->lieferantenSuggestions as $lieferant)
-                                <flux:select.option
-                                    wire:key="lf-{{ $lieferant->lieferantennummer }}"
-                                    value="{{ $lieferant->lieferantennummer }}"
-                                >
-                                    {{ $lieferant->lieferantenname }} ({{ $lieferant->lieferantennummer }})
-                                </flux:select.option>
-                            @endforeach
+                        <div class="md:col-span-2">
+                            <flux:callout icon="information-circle" variant="secondary">
+                                Der tatsächliche Lieferant wird vom internen Empfänger beim Abschluss der Bestellung (Status „Bestellt“) hinterlegt, bevor der Bestellschein nach D3 übertragen wird.
+                            </flux:callout>
+                        </div>
+                    @else
+                        <flux:field>
+                            <flux:label>Lieferant</flux:label>
+                            <flux:select
+                                variant="combobox"
+                                wire:model.live="lieferantennummer"
+                                :filter="false"
+                                clearable
+                                placeholder="Lieferant wählen…"
+                            >
+                                <x-slot name="input">
+                                    <flux:select.input
+                                        wire:model.live.debounce.250ms="lieferantSearch"
+                                        placeholder="Name oder Nummer eingeben…"
+                                    />
+                                </x-slot>
 
-                            <x-slot name="empty">
-                                <flux:select.option.empty when-loading="Suche läuft…">
-                                    Keine Lieferanten gefunden.
-                                </flux:select.option.empty>
-                            </x-slot>
-                        </flux:select>
-                        <flux:error name="lieferantennummer" />
-                    </flux:field>
+                                @foreach ($this->lieferantenSuggestions as $lieferant)
+                                    <flux:select.option
+                                        wire:key="lf-{{ $lieferant->lieferantennummer }}"
+                                        value="{{ $lieferant->lieferantennummer }}"
+                                    >
+                                        {{ $lieferant->lieferantenname }} ({{ $lieferant->lieferantennummer }})
+                                    </flux:select.option>
+                                @endforeach
 
-                    <div class="flex items-end">
-                        <flux:modal.trigger name="fehlender-lieferant">
-                            <flux:button variant="outline" class="w-full">
-                                Lieferant fehlt
-                            </flux:button>
-                        </flux:modal.trigger>
-                    </div>
+                                <x-slot name="empty">
+                                    <flux:select.option.empty when-loading="Suche läuft…">
+                                        Keine Lieferanten gefunden.
+                                    </flux:select.option.empty>
+                                </x-slot>
+                            </flux:select>
+                            <flux:error name="lieferantennummer" />
+                        </flux:field>
 
-                    <livewire:intranet-app-bestellungen::apps.bestellungen.erstellen-projekt-select wire:model="projektId" />
+                        <div class="flex items-end">
+                            <flux:modal.trigger name="fehlender-lieferant">
+                                <flux:button variant="outline" class="w-full">
+                                    Lieferant fehlt
+                                </flux:button>
+                            </flux:modal.trigger>
+                        </div>
+                    @endif
+
+                    @if ($this->userHasProjekte)
+                        <flux:field wire:key="bestellung-projekt-select">
+                            <flux:label>Projekt <flux:badge size="sm" color="zinc" class="ml-1">Optional</flux:badge></flux:label>
+                            <flux:select
+                                variant="listbox"
+                                wire:model="projektId"
+                                clearable
+                                placeholder="Kein Projekt"
+                            >
+                                @foreach ($this->projektSuggestions as $projektOption)
+                                    <flux:select.option
+                                        wire:key="proj-{{ $projektOption->id }}"
+                                        value="{{ $projektOption->id }}"
+                                    >
+                                        {{ $projektOption->name }}
+                                    </flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:error name="projektId" />
+                        </flux:field>
+                    @endif
 
                     <flux:field>
                         <flux:label>Kostenstelle</flux:label>

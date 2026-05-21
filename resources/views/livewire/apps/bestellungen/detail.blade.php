@@ -56,9 +56,15 @@
                             </flux:button>
                         @endif
                         @if ($this->kannBestellen())
-                            <flux:button size="sm" variant="primary" icon="paper-airplane" wire:click="bestellen" wire:confirm="Bestellung an D3 senden?">
-                                Bestellen
-                            </flux:button>
+                            @if ($bestellung->istIntern())
+                                <flux:button size="sm" variant="primary" icon="paper-airplane" wire:click="bestellen">
+                                    Bestellen
+                                </flux:button>
+                            @else
+                                <flux:button size="sm" variant="primary" icon="paper-airplane" wire:click="bestellen" wire:confirm="Bestellung an D3 senden?">
+                                    Bestellen
+                                </flux:button>
+                            @endif
                         @endif
                     </div>
                 </div>
@@ -358,7 +364,17 @@
                         </div>
                     @endif
                     <div>
-                        <dt class="text-zinc-500">Lieferant</dt>
+                        <dt class="text-zinc-500">Art</dt>
+                        <dd>{{ $bestellung->typ?->label() ?? $bestellung->typ }}</dd>
+                    </div>
+                    @if ($bestellung->istIntern() && $bestellung->internerEmpfaenger)
+                        <div>
+                            <dt class="text-zinc-500">Interner Empfänger</dt>
+                            <dd>{{ $bestellung->internerEmpfaenger->vorname }} {{ $bestellung->internerEmpfaenger->nachname }}</dd>
+                        </div>
+                    @endif
+                    <div>
+                        <dt class="text-zinc-500">Lieferant{{ $bestellung->benoetigtFinalenLieferantenVorD3() ? ' (vorläufig)' : '' }}</dt>
                         <dd>{{ $bestellung->lieferantenname }} ({{ $bestellung->lieferantennummer }})</dd>
                     </div>
                     <div>
@@ -532,6 +548,66 @@
                     <flux:button type="submit" variant="primary" icon="arrow-right">Weiterleiten</flux:button>
                 </div>
             </form>
+        </flux:modal>
+
+        <flux:modal name="bestellen-lieferant" class="max-w-lg">
+            <flux:heading size="lg">Tatsächlichen Lieferanten hinterlegen</flux:heading>
+            <flux:text class="mt-1 mb-4">
+                Bevor der Bestellschein nach D3 übertragen wird, wählen Sie den Lieferanten, bei dem die Bestellung tatsächlich aufgegeben wurde.
+            </flux:text>
+
+            <flux:field>
+                <flux:label>Lieferant</flux:label>
+                <flux:select
+                    variant="combobox"
+                    wire:model.live="bestellenLieferantennummer"
+                    :filter="false"
+                    clearable
+                    placeholder="Lieferant wählen…"
+                >
+                    <x-slot name="input">
+                        <flux:select.input
+                            wire:model.live.debounce.250ms="bestellenLieferantSearch"
+                            placeholder="Name oder Nummer eingeben…"
+                        />
+                    </x-slot>
+
+                    @foreach ($this->bestellenLieferantenSuggestions as $lieferant)
+                        <flux:select.option
+                            wire:key="bestellen-lf-{{ $lieferant->lieferantennummer }}"
+                            value="{{ $lieferant->lieferantennummer }}"
+                        >
+                            {{ $lieferant->lieferantenname }} ({{ $lieferant->lieferantennummer }})
+                        </flux:select.option>
+                    @endforeach
+
+                    <x-slot name="empty">
+                        <flux:select.option.empty when-loading="Suche läuft…">
+                            Keine Lieferanten gefunden.
+                        </flux:select.option.empty>
+                    </x-slot>
+                </flux:select>
+                <flux:error name="bestellenLieferantennummer" />
+            </flux:field>
+
+            <div class="flex gap-2 justify-end mt-6">
+                <flux:modal.close>
+                    <flux:button variant="ghost">Abbrechen</flux:button>
+                </flux:modal.close>
+                <flux:button
+                    variant="primary"
+                    icon="paper-airplane"
+                    wire:click="bestellenMitLieferant"
+                    wire:loading.attr="disabled"
+                    wire:target="bestellenMitLieferant"
+                >
+                    <span wire:loading.remove wire:target="bestellenMitLieferant">Bestellen und an D3 senden</span>
+                    <span wire:loading wire:target="bestellenMitLieferant" class="inline-flex items-center gap-2">
+                        <flux:icon name="arrow-path" class="size-4 animate-spin" />
+                        Wird übertragen…
+                    </span>
+                </flux:button>
+            </div>
         </flux:modal>
     </x-intranet-app-bestellungen::bestellungen-layout>
 </div>

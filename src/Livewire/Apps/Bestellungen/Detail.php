@@ -10,11 +10,14 @@ use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
+use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Models\Notiz;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
+use Hwkdo\IntranetAppBestellungen\Services\Lieferant\LieferantSuggestionsService;
+use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
 use Hwkdo\D3RestLaravel\Client as D3Client;
 use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
@@ -22,6 +25,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -92,9 +96,16 @@ class Detail extends Component
 
     public $angebotPdf = null;
 
+    public ?string $bestellenLieferantennummer = null;
+
+    public string $bestellenLieferantSearch = '';
+
     public function mount(Bestellung $bestellung): void
     {
-        $this->bestellung = $bestellung->load(['user', 'freigeber', 'besteller', 'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user', 'projekt']);
+        $this->bestellung = $bestellung->load([
+            'user', 'freigeber', 'besteller', 'internerEmpfaenger',
+            'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user', 'projekt',
+        ]);
 
         if ($this->aktionParam === 'freigeben' && $this->kannFreigeben()) {
             Flux::modal('freigeben-modal')->show();
@@ -111,6 +122,9 @@ class Detail extends Component
                 );
             }
             $this->einreichenModalOeffnen();
+        }
+        if ($this->aktionParam === 'bestellen' && $this->kannBestellen()) {
+            $this->bestellen();
         }
     }
 
@@ -132,8 +146,23 @@ class Detail extends Component
 
     public function kannBestellen(): bool
     {
-        return $this->bestellung->status === BestellungStatus::Freigegeben
-            && Auth::user()?->can('manage-app-bestellungen');
+        if ($this->bestellung->status !== BestellungStatus::Freigegeben) {
+            return false;
+        }
+
+        if ($this->bestellung->istIntern()) {
+            return (int) Auth::id() === (int) $this->bestellung->interner_empfaenger_user_id;
+        }
+
+        return Auth::user()?->can('manage-app-bestellungen') ?? false;
+    }
+
+    #[Computed]
+    public function bestellenLieferantenSuggestions(): Collection
+    {
+        return app(LieferantSuggestionsService::class)
+            ->suche($this->bestellenLieferantSearch, $this->bestellenLieferantennummer)
+            ->reject(fn (LieferantCache $l): bool => PlatzhalterLieferant::istPlatzhalter($l->lieferantennummer));
     }
 
     public function d3OneUrl(): ?string
@@ -255,8 +284,65 @@ class Detail extends Component
         if (! $this->kannBestellen()) {
             return;
         }
+
+        if ($this->bestellung->istIntern()) {
+            $this->bestellenLieferantennummer = null;
+            $this->bestellenLieferantSearch = '';
+            Flux::modal('bestellen-lieferant')->show();
+
+            return;
+        }
+
+        $this->bestellenAusfuehren();
+    }
+
+    public function bestellenMitLieferant(): void
+    {
+        if (! $this->kannBestellen()) {
+            return;
+        }
+
+        $this->validate([
+            'bestellenLieferantennummer' => [
+                'required',
+                'string',
+                'max:50',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (PlatzhalterLieferant::istPlatzhalter(is_string($value) ? $value : null)) {
+                        $fail('Bitte wählen Sie den tatsächlichen Lieferanten (nicht den Platzhalter).');
+                    }
+
+                    $exists = LieferantCache::query()
+                        ->where('lieferantennummer', $value)
+                        ->exists();
+
+                    if (! $exists) {
+                        $fail('Der gewählte Lieferant ist nicht im Stammdaten-Cache vorhanden.');
+                    }
+                },
+            ],
+        ], [
+            'bestellenLieferantennummer.required' => 'Bitte wählen Sie den tatsächlichen Lieferanten.',
+        ]);
+
+        $lieferant = LieferantCache::query()
+            ->where('lieferantennummer', $this->bestellenLieferantennummer)
+            ->first();
+
+        $this->bestellung->update([
+            'lieferantennummer' => $lieferant?->lieferantennummer,
+            'lieferantenname' => $lieferant?->lieferantenname,
+        ]);
+
+        $this->refreshBestellung();
+        Flux::modal('bestellen-lieferant')->close();
+        $this->bestellenAusfuehren();
+    }
+
+    private function bestellenAusfuehren(): void
+    {
         try {
-            app(BestellungWorkflow::class)->bestellen($this->bestellung, Auth::user());
+            app(BestellungWorkflow::class)->bestellen($this->bestellung->fresh(), Auth::user());
             Flux::toast(heading: 'Bestellt', text: 'Die Bestellung wurde erfolgreich an D3 übertragen.', variant: 'success');
             $this->refreshBestellung();
         } catch (\Throwable $e) {
@@ -643,7 +729,8 @@ class Detail extends Component
     private function refreshBestellung(): void
     {
         $this->bestellung = $this->bestellung->fresh([
-            'user', 'freigeber', 'besteller', 'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user',
+            'user', 'freigeber', 'besteller', 'internerEmpfaenger',
+            'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user', 'projekt',
         ]);
     }
 

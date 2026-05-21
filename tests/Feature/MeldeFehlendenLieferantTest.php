@@ -47,7 +47,7 @@ it('meldet einen fehlenden Lieferanten und setzt den Platzhalter', function (): 
     $user = User::factory()->create();
 
     Livewire::actingAs($user)
-        ->test(Erstellen::class)
+        ->test(Erstellen::class, ['typ' => 'extern'])
         ->set('fehlenderLieferantName', 'Muster Lieferant AG')
         ->set('fehlenderLieferantAdresse', 'Hauptstraße 10')
         ->set('fehlenderLieferantIban', 'DE001234567890')
@@ -70,7 +70,7 @@ it('validiert den Namen beim Melden eines fehlenden Lieferanten', function (): v
     $user = User::factory()->create();
 
     Livewire::actingAs($user)
-        ->test(Erstellen::class)
+        ->test(Erstellen::class, ['typ' => 'extern'])
         ->set('fehlenderLieferantName', '')
         ->call('meldeFehlendenLieferant')
         ->assertHasErrors(['fehlenderLieferantName']);

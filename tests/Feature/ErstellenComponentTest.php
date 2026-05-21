@@ -40,7 +40,7 @@ it('legt eine Bestellung mit Position an und reicht sie ein', function (): void 
     $positionPdf = UploadedFile::fake()->create('position.pdf', 64, 'application/pdf');
 
     Livewire::actingAs($user)
-        ->test(Erstellen::class)
+        ->test(Erstellen::class, ['typ' => 'extern'])
         ->set('lieferantennummer', '12345')
         ->set('lieferantenname', 'Test GmbH')
         ->set('kostenstelle', '4711')
@@ -75,7 +75,7 @@ it('verlangt eine Begründung beim Erstellen einer Bestellung', function (): voi
     $user = User::factory()->create();
 
     Livewire::actingAs($user)
-        ->test(Erstellen::class)
+        ->test(Erstellen::class, ['typ' => 'extern'])
         ->set('lieferantennummer', '12345')
         ->set('lieferantenname', 'Test GmbH')
         ->set('kostenstelle', '4711')

@@ -168,6 +168,9 @@ class AppSettings extends BaseAppSettings
 
         #[Description('E-Mail-Empfänger für Meldungen „Lieferant fehlt“ (Legacy: Rechnungswesen / ticketkategorien.email)')]
         public string $fehlenderLieferantEmpfaengerEmail = 'rechnungswesen@hwk-do.de',
+
+        #[Description('Spatie-Rolle für wählbare interne Empfänger (Mitglieder = interne Fachabteilung, z. B. IT)')]
+        public string $interneBestellerGruppe = 'App-Bestellungen-InterneBesteller',
     ) {}
 
     /**

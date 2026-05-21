@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Models\User;
 use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
@@ -43,10 +45,15 @@ function makeWorkflow(?AppSettings $settings = null): BestellungWorkflow
 }
 
 it('führt eine Bestellung von Entwurf über Freigabe bis Bestellt', function (): void {
+    Permission::findOrCreate('manage-app-bestellungen', 'web');
+    $adminRole = Role::findOrCreate('App-Bestellungen-Admin', 'web');
+    $adminRole->givePermissionTo('manage-app-bestellungen');
+
     $user = User::factory()->create();
     $user->assignRole($user->roles()->firstOrCreate(['name' => 'Benutzer', 'guard_name' => 'web'])->name ?? 'Benutzer');
+    $user->assignRole($adminRole);
 
-    $bestellung = Bestellung::factory()->create([
+    $bestellung = Bestellung::factory()->extern()->create([
         'status' => BestellungStatus::Entwurf,
         'gesamtbetrag' => 100.0,
         'user_id' => $user->id,

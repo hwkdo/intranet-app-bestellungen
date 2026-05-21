@@ -7,6 +7,8 @@ namespace Hwkdo\IntranetAppBestellungen\Models;
 use App\Models\User;
 use Hwkdo\IntranetAppBestellungen\Database\Factories\BestellungFactory;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
+use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
+use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +29,7 @@ class Bestellung extends Model
     {
         return [
             'status' => BestellungStatus::class,
+            'typ' => BestellungTyp::class,
             'kontierung' => 'array',
             'gruppen' => 'array',
             'lieferanschrift' => 'array',
@@ -68,6 +71,11 @@ class Bestellung extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function internerEmpfaenger(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'interner_empfaenger_user_id');
+    }
+
     public function freigeber(): BelongsTo
     {
         return $this->belongsTo(User::class, 'freigeber_id');
@@ -106,6 +114,23 @@ class Bestellung extends Model
         return $query->where('user_id', $userId);
     }
 
+    public function scopeFuerInternenEmpfaenger(Builder $query, int $userId): Builder
+    {
+        return $query
+            ->where('typ', BestellungTyp::Intern)
+            ->where('interner_empfaenger_user_id', $userId);
+    }
+
+    public function scopeInternBearbeitungOffen(Builder $query): Builder
+    {
+        return $query->where('status', BestellungStatus::Freigegeben);
+    }
+
+    public function istInternBearbeitungOffen(): bool
+    {
+        return $this->istIntern() && $this->status === BestellungStatus::Freigegeben;
+    }
+
     public function refreshGesamtbetrag(): void
     {
         $this->gesamtbetrag = $this->positionen()
@@ -122,5 +147,15 @@ class Bestellung extends Model
     public function istInD3(): bool
     {
         return ! is_null($this->d3id);
+    }
+
+    public function istIntern(): bool
+    {
+        return $this->typ === BestellungTyp::Intern;
+    }
+
+    public function benoetigtFinalenLieferantenVorD3(): bool
+    {
+        return $this->istIntern() && PlatzhalterLieferant::istPlatzhalter($this->lieferantennummer);
     }
 }

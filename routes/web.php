@@ -9,14 +9,21 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])->group(function (
     Route::get('apps/bestellungen', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Index::class)
         ->name('apps.bestellungen.index');
 
-    Route::get('apps/bestellungen/erstellen', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Erstellen::class)
+    Route::get('apps/bestellungen/erstellen', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\ErstellenStart::class)
         ->name('apps.bestellungen.erstellen');
+
+    Route::get('apps/bestellungen/erstellen/{typ}', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Erstellen::class)
+        ->whereIn('typ', ['intern', 'extern'])
+        ->name('apps.bestellungen.erstellen.form');
 
     Route::get('apps/bestellungen/meine', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Meine::class)
         ->name('apps.bestellungen.meine');
 
     Route::get('apps/bestellungen/freigaben', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Freigaben::class)
         ->name('apps.bestellungen.freigaben');
+
+    Route::get('apps/bestellungen/interne', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\InterneBestellungen::class)
+        ->name('apps.bestellungen.interne');
 
     Route::get('apps/bestellungen/settings/user', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Settings\User::class)
         ->name('apps.bestellungen.settings.user');

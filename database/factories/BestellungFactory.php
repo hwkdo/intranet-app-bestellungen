@@ -6,7 +6,9 @@ namespace Hwkdo\IntranetAppBestellungen\Database\Factories;
 
 use App\Models\User;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
+use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
+use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -54,6 +56,26 @@ class BestellungFactory extends Factory
         return $this->state(fn (): array => [
             'd3id' => 'd3-'.fake()->uuid(),
             'd3_pushed_at' => now(),
+        ]);
+    }
+
+    public function intern(): self
+    {
+        return $this->state(fn (): array => [
+            'typ' => BestellungTyp::Intern,
+            'interner_empfaenger_user_id' => User::factory(),
+            'lieferantennummer' => PlatzhalterLieferant::nummer(),
+            'lieferantenname' => 'Unbekannter Lieferant',
+        ]);
+    }
+
+    public function extern(): self
+    {
+        return $this->state(fn (): array => [
+            'typ' => BestellungTyp::Extern,
+            'interner_empfaenger_user_id' => null,
+            'lieferantennummer' => fake()->numerify('#####'),
+            'lieferantenname' => fake()->company(),
         ]);
     }
 }

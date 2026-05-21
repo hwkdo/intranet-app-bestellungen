@@ -171,7 +171,7 @@ it('wählt standardmäßig kein Projekt vor', function (): void {
     Projekt::factory()->create(['user_id' => $user->id, 'name' => 'Vorhandenes Projekt']);
 
     Livewire::actingAs($user)
-        ->test(Erstellen::class)
+        ->test(Erstellen::class, ['typ' => 'extern'])
         ->assertSet('projektId', null);
 });
 
@@ -179,7 +179,7 @@ it('blendet das Projektfeld aus wenn der Benutzer keine Projekte hat', function 
     $user = User::factory()->create();
 
     Livewire::actingAs($user)
-        ->test(Erstellen::class)
+        ->test(Erstellen::class, ['typ' => 'extern'])
         ->assertDontSee('Kein Projekt');
 });
 
@@ -192,7 +192,7 @@ it('füllt die Begründung beim Erstellen aus der Projekt-Begründung vor', func
 
     Livewire::actingAs($user)
         ->withQueryParams(['projekt' => (string) $projekt->id])
-        ->test(Erstellen::class)
+        ->test(Erstellen::class, ['typ' => 'extern'])
         ->assertSet('projektId', $projekt->id)
         ->assertSet('begruendung', 'Standardbegründung für das IT-Ausstattungsprojekt 2026.');
 });
@@ -208,7 +208,7 @@ it('speichert die Projekt-ID beim Erstellen einer Bestellung', function (): void
 
     Livewire::actingAs($user)
         ->withQueryParams(['projekt' => (string) $projekt->id])
-        ->test(Erstellen::class)
+        ->test(Erstellen::class, ['typ' => 'extern'])
         ->assertSet('projektId', $projekt->id)
         ->set('lieferantennummer', '12345')
         ->set('lieferantenname', 'Test GmbH')

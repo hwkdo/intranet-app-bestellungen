@@ -7,6 +7,7 @@ namespace Hwkdo\IntranetAppBestellungen;
 use Hwkdo\IntranetAppBase\Interfaces\IntranetAppInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
 use Hwkdo\IntranetAppBestellungen\Tasks\FreigabeAusstehendTaskProvider;
+use Hwkdo\IntranetAppBestellungen\Tasks\InterneBestellungAusstehendTaskProvider;
 use Illuminate\Support\Collection;
 
 class IntranetAppBestellungen implements IntranetAppInterface, ProvidesTasksInterface
@@ -58,6 +59,7 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesTasksInte
     {
         return [
             FreigabeAusstehendTaskProvider::class,
+            InterneBestellungAusstehendTaskProvider::class,
         ];
     }
 }
