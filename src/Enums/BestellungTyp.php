@@ -23,4 +23,25 @@ enum BestellungTyp: string
             self::ExternMitPreise => 'Externe Bestellung (mit Preisen)',
         };
     }
+
+    public function bestellscheinLabel(): string
+    {
+        return match ($this) {
+            self::Intern => 'Intern',
+            self::Extern => 'Zum Versenden (ohne Preise)',
+            self::ExternMitPreise => 'Zum Versenden (mit Preise)',
+        };
+    }
+
+    /**
+     * @return array<int, self>
+     */
+    public static function bestellscheinVarianten(): array
+    {
+        return [
+            self::Intern,
+            self::Extern,
+            self::ExternMitPreise,
+        ];
+    }
 }

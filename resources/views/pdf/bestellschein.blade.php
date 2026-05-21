@@ -47,8 +47,8 @@
         }
 
         .header .logo img {
-            max-width: 250px;
-            max-height: 50px;
+            max-width: 300px;
+            max-height: none;
         }
 
         .layout-table {

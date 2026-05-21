@@ -27,15 +27,22 @@
                         @endif
                     </div>
                     <div class="flex flex-wrap gap-2">
-                        <flux:button
-                            size="sm"
-                            variant="ghost"
-                            icon="document-text"
-                            target="_blank"
-                            :href="route('apps.bestellungen.pdf.inline', $bestellung)"
-                        >
-                            Bestellschein
-                        </flux:button>
+                        <flux:dropdown>
+                            <flux:button size="sm" variant="ghost" icon="document-text" icon-trailing="chevron-down">
+                                Bestellschein
+                            </flux:button>
+                            <flux:menu>
+                                @foreach ($this->bestellscheinPdfMenue as $variante)
+                                    <flux:menu.item
+                                        :href="$variante['inline_url']"
+                                        target="_blank"
+                                        icon="document-text"
+                                    >
+                                        {{ $variante['label'] }}
+                                    </flux:menu.item>
+                                @endforeach
+                            </flux:menu>
+                        </flux:dropdown>
                         <flux:button size="sm" variant="ghost" icon="document-duplicate" wire:click="wiederholen">
                             Wiederholen
                         </flux:button>

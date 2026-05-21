@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Services\Pdf;
 
 use App\Services\PdfService;
+use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\File;
@@ -17,32 +18,52 @@ class BestellscheinPdfService
         private readonly PdfService $pdfService,
     ) {}
 
-    public function html(Bestellung $bestellung): string
+    public function html(Bestellung $bestellung, BestellungTyp $typ = BestellungTyp::Intern): string
     {
         $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'lieferanschriftUser', 'aktionen.user']);
 
         return View::make('intranet-app-bestellungen::pdf.bestellschein', [
             'bestellung' => $bestellung,
+            'typ' => $typ->value,
             'lieferant' => $this->resolveLieferant($bestellung),
             'logoDataUri' => $this->logoDataUri(),
         ])->render();
     }
 
     /**
-     * Liefert das HWK-Dortmund-Logo als data:image/svg+xml;base64-URI,
-     * damit das PDF-Rendering ohne externe URL auskommt.
+     * Liefert das HWK-Dortmund-Logo als data:-URI (wie Legacy hwkdo_logo.png),
+     * damit Gotenberg ohne externe URL auskommt.
      */
     private function logoDataUri(): string
     {
-        $svgPath = __DIR__.'/../../../resources/img/logo-hwk.svg';
+        foreach ($this->logoCandidatePaths() as $path) {
+            if (! is_readable($path)) {
+                continue;
+            }
 
-        if (! is_file($svgPath)) {
-            return '';
+            $binary = file_get_contents($path);
+            if ($binary === false || $binary === '') {
+                continue;
+            }
+
+            $mime = str_ends_with(strtolower($path), '.svg') ? 'image/svg+xml' : 'image/png';
+
+            return 'data:'.$mime.';base64,'.base64_encode($binary);
         }
 
-        $svg = (string) file_get_contents($svgPath);
+        return '';
+    }
 
-        return 'data:image/svg+xml;base64,'.base64_encode($svg);
+    /**
+     * @return array<int, string>
+     */
+    private function logoCandidatePaths(): array
+    {
+        return [
+            public_path('img/hwkdo_logo.png'),
+            public_path('public/img/hwkdo_logo.png'),
+            public_path('img/Handwerkskammer-Dortmund-Logo-Header.png'),
+        ];
     }
 
     /**
@@ -84,7 +105,7 @@ class BestellscheinPdfService
      * Erzeugt das Bestellschein-PDF und mergt ggf. Anhänge der Positionen.
      * Liefert den lokalen Dateipfad zur fertigen PDF zurück.
      */
-    public function buildFile(Bestellung $bestellung): string
+    public function buildFile(Bestellung $bestellung, BestellungTyp $typ = BestellungTyp::Intern): string
     {
         $tmpDir = storage_path('tmp/bestellungen');
         File::ensureDirectoryExists($tmpDir);
@@ -92,7 +113,7 @@ class BestellscheinPdfService
         $baseFilename = $this->makeFilename($bestellung);
 
         // Gotenberg::save() liefert den tatsächlich gespeicherten Dateinamen zurück.
-        $savedFilename = $this->pdfService->saveFromHtml($this->html($bestellung), $tmpDir, $baseFilename);
+        $savedFilename = $this->pdfService->saveFromHtml($this->html($bestellung, $typ), $tmpDir, $baseFilename);
         $basePath = $tmpDir.'/'.$savedFilename;
 
         if (! File::exists($basePath)) {
@@ -115,9 +136,9 @@ class BestellscheinPdfService
         );
     }
 
-    public function inline(Bestellung $bestellung): Response
+    public function inline(Bestellung $bestellung, BestellungTyp $typ = BestellungTyp::Intern): Response
     {
-        $path = $this->buildFile($bestellung);
+        $path = $this->buildFile($bestellung, $typ);
 
         return response(File::get($path), 200, [
             'Content-Type' => 'application/pdf',
@@ -125,9 +146,9 @@ class BestellscheinPdfService
         ]);
     }
 
-    public function download(Bestellung $bestellung): Response
+    public function download(Bestellung $bestellung, BestellungTyp $typ = BestellungTyp::Intern): Response
     {
-        $path = $this->buildFile($bestellung);
+        $path = $this->buildFile($bestellung, $typ);
 
         return response(File::get($path), 200, [
             'Content-Type' => 'application/pdf',

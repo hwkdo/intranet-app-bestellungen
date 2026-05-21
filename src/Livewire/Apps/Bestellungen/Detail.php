@@ -8,6 +8,7 @@ use App\Models\User;
 use Flux\Flux;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
+use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
@@ -163,6 +164,25 @@ class Detail extends Component
         return app(LieferantSuggestionsService::class)
             ->suche($this->bestellenLieferantSearch, $this->bestellenLieferantennummer)
             ->reject(fn (LieferantCache $l): bool => PlatzhalterLieferant::istPlatzhalter($l->lieferantennummer));
+    }
+
+    /**
+     * @return array<int, array{typ: string, label: string, inline_url: string}>
+     */
+    #[Computed]
+    public function bestellscheinPdfMenue(): array
+    {
+        return array_map(
+            fn (BestellungTyp $typ): array => [
+                'typ' => $typ->value,
+                'label' => $typ->bestellscheinLabel(),
+                'inline_url' => route('apps.bestellungen.pdf.inline', [
+                    'bestellung' => $this->bestellung,
+                    'typ' => $typ->value,
+                ]),
+            ],
+            BestellungTyp::bestellscheinVarianten(),
+        );
     }
 
     public function d3OneUrl(): ?string

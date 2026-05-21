@@ -49,9 +49,11 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])
         Route::get('apps/bestellungen/{bestellung}', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Detail::class)
             ->name('apps.bestellungen.detail');
 
-        Route::get('apps/bestellungen/{bestellung}/pdf/inline', [PdfController::class, 'inline'])
+        Route::get('apps/bestellungen/{bestellung}/pdf/{typ}/inline', [PdfController::class, 'inline'])
+            ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise'])
             ->name('apps.bestellungen.pdf.inline');
 
-        Route::get('apps/bestellungen/{bestellung}/pdf/download', [PdfController::class, 'download'])
+        Route::get('apps/bestellungen/{bestellung}/pdf/{typ}/download', [PdfController::class, 'download'])
+            ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise'])
             ->name('apps.bestellungen.pdf.download');
     });
