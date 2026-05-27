@@ -370,7 +370,8 @@
                                                 wire:model.live.debounce.300ms="positionen.{{ $idx }}.menge"
                                                 x-on:input="setRowTotal({{ $idx }}, $event.target.value, $wire.positionen?.[{{ $idx }}]?.preis)"
                                                 type="number"
-                                                step="0.01"
+                                                step="1"
+                                                min="1"
                                                 class="text-right"
                                             />
                                             <flux:error name="positionen.{{ $idx }}.menge" />

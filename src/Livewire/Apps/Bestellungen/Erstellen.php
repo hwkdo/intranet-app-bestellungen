@@ -260,7 +260,7 @@ class Erstellen extends Component
             ],
             'positionen' => ['required', 'array', 'min:1'],
             'positionen.*.bezeichnung' => ['required', 'string', 'max:255'],
-            'positionen.*.menge' => ['required', 'numeric', 'min:0.01'],
+            'positionen.*.menge' => ['required', 'integer', 'min:1'],
             'positionen.*.preis' => ['required', 'numeric', 'min:0'],
             'positionen.*.einheit' => ['nullable', 'string', 'max:20'],
             'positionen.*.art_id' => ['nullable', 'integer'],
