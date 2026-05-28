@@ -16,6 +16,7 @@ use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Models\Notiz;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
+use Hwkdo\IntranetAppBestellungen\Services\Api\BestellungAngebotUploadService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
@@ -28,6 +29,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
@@ -740,19 +742,55 @@ class Detail extends Component
             'angebotPdf.required' => 'Bitte laden Sie das Vergleichsangebot als PDF hoch.',
         ]);
 
-        $relPath = $this->angebotPdf->store('bestellungen/angebote/'.$this->bestellung->getKey(), 'local');
-
-        $angebot = Angebot::create([
-            'bestellung_id' => $this->bestellung->getKey(),
-            'user_id' => Auth::id(),
-            'typ' => 'angebot',
-            'lieferantenname' => $this->angebotLieferant,
-            'nummer' => $this->angebotNummer,
-            'betrag' => $this->angebotBetrag,
-            'pdf_path' => $relPath,
-        ]);
+        $angebot = app(BestellungAngebotUploadService::class)->store(
+            bestellung: $this->bestellung,
+            userId: (int) Auth::id(),
+            payload: [
+                'file' => $this->angebotPdf,
+                'supplier_name' => $this->angebotLieferant,
+                'reference_number' => $this->angebotNummer,
+                'amount' => $this->angebotBetrag === '' ? null : $this->angebotBetrag,
+            ],
+        );
 
         $this->nachAngebotGespeichert($angebot);
+    }
+
+    public function angebotLoeschen(int $angebotId): void
+    {
+        if (! $this->kannAngeboteErfassen()) {
+            return;
+        }
+
+        $angebot = $this->bestellung->angebote()
+            ->whereKey($angebotId)
+            ->first();
+
+        if (! $angebot) {
+            return;
+        }
+
+        if (filled($angebot->pdf_path)) {
+            Storage::disk('local')->delete((string) $angebot->pdf_path);
+        }
+
+        $angebot->delete();
+
+        app(BestellungWorkflow::class)->logAktion(
+            $this->bestellung,
+            Auth::user(),
+            AktionTyp::AngebotEntfernt,
+            payload: ['angebot_id' => $angebotId, 'typ' => $angebot->typ],
+        );
+
+        $this->refreshBestellung();
+        unset($this->angebotsregelAuswertung);
+
+        Flux::toast(
+            text: 'Das Angebot wurde inkl. Datei gelöscht.',
+            heading: 'Angebot gelöscht',
+            variant: 'success',
+        );
     }
 
     private function nachAngebotGespeichert(Angebot $angebot): void
@@ -774,7 +812,9 @@ class Detail extends Component
         Flux::toast(
             text: $angebot->typ === 'begruendung'
                 ? 'Die Ausnahme-Begründung wurde als PDF gespeichert und kann nach dem Bestellen nach D3 übertragen werden.'
-                : 'Das Vergleichsangebot wurde gespeichert. Die D3-Übertragung erfolgt beim Bestellen.',
+                : ($angebot->extraction_status === 'pending'
+                    ? 'Das Vergleichsangebot wurde gespeichert. Fehlende Metadaten werden nun automatisch per KI extrahiert.'
+                    : 'Das Vergleichsangebot wurde gespeichert. Die D3-Übertragung erfolgt beim Bestellen.'),
             heading: $angebot->typ === 'begruendung' ? 'Ausnahme-Begründung gespeichert' : 'Vergleichsangebot gespeichert',
             variant: 'success',
         );

@@ -248,6 +248,9 @@
                                         <flux:input type="file" wire:model="angebotPdf" label="Angebots-PDF" accept="application/pdf,.pdf" class="md:col-span-2" />
                                         <flux:error name="angebotPdf" class="md:col-span-2" />
                                     </div>
+                                    <flux:callout icon="sparkles" variant="secondary">
+                                        Wenn Lieferant, Angebotsnummer oder Betrag leer bleiben, werden diese Felder automatisch per KI aus dem PDF ermittelt.
+                                    </flux:callout>
                                 @endif
 
                                 <flux:button type="submit" variant="primary" icon="plus">
@@ -271,6 +274,7 @@
                                     <flux:table.column class="text-right">Betrag</flux:table.column>
                                     <flux:table.column>D3</flux:table.column>
                                     <flux:table.column>PDF</flux:table.column>
+                                    <flux:table.column>Aktion</flux:table.column>
                                 </flux:table.columns>
                                 <flux:table.rows>
                                     @foreach ($bestellung->angebote as $angebot)
@@ -305,6 +309,21 @@
                                                         rel="noopener noreferrer"
                                                     >
                                                         {{ $angebot->typ === 'begruendung' ? 'Begründung anzeigen' : 'Angebot anzeigen' }}
+                                                    </flux:button>
+                                                @else
+                                                    <flux:text class="text-zinc-400 text-sm">—</flux:text>
+                                                @endif
+                                            </flux:table.cell>
+                                            <flux:table.cell>
+                                                @if ($this->kannAngeboteErfassen())
+                                                    <flux:button
+                                                        size="sm"
+                                                        variant="danger"
+                                                        icon="trash"
+                                                        wire:click="angebotLoeschen({{ $angebot->id }})"
+                                                        wire:confirm="Angebot inkl. PDF-Datei wirklich löschen?"
+                                                    >
+                                                        Löschen
                                                     </flux:button>
                                                 @else
                                                     <flux:text class="text-zinc-400 text-sm">—</flux:text>

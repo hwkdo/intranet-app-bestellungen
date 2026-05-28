@@ -16,6 +16,10 @@ enum AktionTyp: string
     case D3Push = 'd3_push';
     case D3RePush = 'd3_re_push';
     case AngebotHinzugefuegt = 'angebot_hinzugefuegt';
+    case AngebotEntfernt = 'angebot_entfernt';
+    case AngebotViaOutlookHochgeladen = 'angebot_via_outlook_hochgeladen';
+    case AngebotExtraktionAbgeschlossen = 'angebot_extraktion_abgeschlossen';
+    case AngebotExtraktionFehlgeschlagen = 'angebot_extraktion_fehlgeschlagen';
     case NotizHinzugefuegt = 'notiz_hinzugefuegt';
     case Wiederholt = 'wiederholt';
 
@@ -32,6 +36,10 @@ enum AktionTyp: string
             self::D3Push => 'An D3 übertragen',
             self::D3RePush => 'D3 Re-Push',
             self::AngebotHinzugefuegt => 'Angebot hinzugefügt',
+            self::AngebotEntfernt => 'Angebot entfernt',
+            self::AngebotViaOutlookHochgeladen => 'Angebot via Outlook hochgeladen',
+            self::AngebotExtraktionAbgeschlossen => 'Angebots-Extraktion abgeschlossen',
+            self::AngebotExtraktionFehlgeschlagen => 'Angebots-Extraktion fehlgeschlagen',
             self::NotizHinzugefuegt => 'Notiz hinzugefügt',
             self::Wiederholt => 'Wiederholt aus Vorlage',
         };

@@ -19,6 +19,8 @@ class Angebot extends Model
         return [
             'betrag' => 'decimal:2',
             'd3_pushed_at' => 'datetime',
+            'extraction_payload' => 'array',
+            'extracted_at' => 'datetime',
         ];
     }
 

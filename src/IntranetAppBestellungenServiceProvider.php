@@ -38,5 +38,6 @@ class IntranetAppBestellungenServiceProvider extends PackageServiceProvider
     {
         parent::boot();
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
+        $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
     }
 }
