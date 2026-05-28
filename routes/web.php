@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Hwkdo\IntranetAppBestellungen\Http\Controllers\AngebotPdfController;
 use Hwkdo\IntranetAppBestellungen\Http\Controllers\PdfController;
 use Illuminate\Support\Facades\Route;
 
@@ -56,4 +57,7 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])
         Route::get('apps/bestellungen/{bestellung}/pdf/{typ}/download', [PdfController::class, 'download'])
             ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise'])
             ->name('apps.bestellungen.pdf.download');
+
+        Route::get('apps/bestellungen/{bestellung}/angebote/{angebot}/pdf/inline', [AngebotPdfController::class, 'inline'])
+            ->name('apps.bestellungen.angebot.pdf.inline');
     });

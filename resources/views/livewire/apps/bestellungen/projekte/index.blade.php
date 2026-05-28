@@ -30,6 +30,9 @@
                             >
                                 <flux:table.cell>
                                     <div class="font-medium">{{ $projekt->name }}</div>
+                                    @if ($projekt->d3_projekt_id)
+                                        <div class="text-xs text-zinc-500 mt-0.5 font-mono">{{ $projekt->d3_projekt_id }}</div>
+                                    @endif
                                     @if ($projekt->beschreibung)
                                         <div class="text-xs text-zinc-500 mt-0.5 line-clamp-1">{{ $projekt->beschreibung }}</div>
                                     @endif

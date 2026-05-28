@@ -20,6 +20,8 @@ class BestellscheinD3Service
 {
     public function __construct(
         private readonly BestellscheinPdfService $pdfService,
+        private readonly D3AbteilungResolver $abteilungResolver,
+        private readonly D3BenutzerResolver $benutzerResolver,
     ) {}
 
     /**
@@ -27,11 +29,11 @@ class BestellscheinD3Service
      */
     public function push(Bestellung $bestellung, ?User $actor = null): ?string
     {
-        $bestellung->loadMissing(['positionen', 'user', 'notizen']);
+        $bestellung->loadMissing(['positionen', 'user', 'notizen', 'projekt']);
 
         $pdfPath = $this->pdfService->buildFile($bestellung);
 
-        $dokument = new Bestellschein([
+        $dokumentData = [
             'nummer' => (int) $bestellung->nummer,
             'lieferantenName' => (string) $bestellung->lieferantenname,
             'lieferantenSuchfeld' => (string) $bestellung->lieferantennummer,
@@ -42,12 +44,18 @@ class BestellscheinD3Service
             'erfassungsdatum' => optional($bestellung->created_at)->format('Y-m-d'),
             'bueBelegnummer' => null,
             'betreff' => $bestellung->betreff ?? $bestellung->nummer,
-            'benutzer' => $this->resolveBenutzer($bestellung),
+            'benutzer' => $this->benutzerResolver->resolve($bestellung),
             'belegdatum' => optional($bestellung->created_at)->format('Y-m-d'),
-            'abteilung' => $this->resolveAbteilung($bestellung),
+            'abteilung' => $this->abteilungResolver->resolve($bestellung),
             'doc_type' => DocTypeEnum::Bestellschein,
             'filename' => basename($pdfPath),
-        ]);
+        ];
+
+        if (filled($bestellung->projekt?->d3_projekt_id)) {
+            $dokumentData['projektId'] = $bestellung->projekt->d3_projekt_id;
+        }
+
+        $dokument = new Bestellschein($dokumentData);
 
         $this->log('push.start', $bestellung, ['pdf_path' => $pdfPath]);
 
@@ -154,114 +162,6 @@ class BestellscheinD3Service
                     ]);
                 }
             });
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function resolveBenutzer(Bestellung $bestellung): array
-    {
-        $bestellung->loadMissing(['user', 'besteller', 'freigeber', 'aktionen.user']);
-
-        $werte = collect([
-            $this->d3BenutzerWert($bestellung->user),
-            $this->d3BenutzerWert($bestellung->besteller),
-            $this->d3BenutzerWert($bestellung->freigeber),
-        ]);
-
-        if (! $bestellung->freigeber_id) {
-            $freigegebenDurch = $bestellung->aktionen
-                ->firstWhere('typ', AktionTyp::Freigegeben->value)?->user;
-
-            $werte->push($this->d3BenutzerWert($freigegebenDurch));
-        }
-
-        return $werte
-            ->map(fn ($wert) => is_string($wert) ? trim($wert) : null)
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-    }
-
-    private function d3BenutzerWert(?\App\Models\User $user): ?string
-    {
-        if (! $user) {
-            return null;
-        }
-
-        $ldapDisplayName = trim((string) ($user->ldap_displayname ?? ''));
-        if ($ldapDisplayName !== '') {
-            return $ldapDisplayName;
-        }
-
-        $vorname = trim((string) ($user->vorname ?? ''));
-        $nachname = trim((string) ($user->nachname ?? ''));
-        if ($nachname !== '' && $vorname !== '') {
-            return $nachname.', '.$vorname;
-        }
-
-        $name = trim((string) ($user->name ?? ''));
-        if ($name !== '') {
-            return $name;
-        }
-
-        $username = trim((string) ($user->username ?? ''));
-
-        return $username !== '' ? $username : null;
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function resolveAbteilung(Bestellung $bestellung): array
-    {
-        $gruppen = collect($bestellung->gruppen ?? [])
-            ->map(fn ($gruppe) => trim((string) $gruppe))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        if ($gruppen !== []) {
-            return $gruppen;
-        }
-
-        $user = $bestellung->user;
-        if (! $user) {
-            return [];
-        }
-
-        try {
-            $ttlSeconds = $this->soapUserGroupsCacheTtlSeconds();
-            $gruppen = D3RestLaravel::getUserInGroupsSoapCached((string) $user->username, $ttlSeconds);
-            if (is_array($gruppen) && $gruppen !== []) {
-                return collect($gruppen)
-                    ->map(fn ($gruppe) => (string) $gruppe)
-                    ->filter()
-                    ->unique()
-                    ->values()
-                    ->all();
-            }
-        } catch (\Throwable $e) {
-            Log::warning('bestellungen.d3_groups_soap.failed', [
-                'bestellung_id' => $bestellung->getKey(),
-                'user_id' => $user->getKey(),
-                'username' => $user->username,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        $abteilung = $user->abteilung ?? null;
-
-        return $abteilung ? [(string) $abteilung] : [];
-    }
-
-    private function soapUserGroupsCacheTtlSeconds(): int
-    {
-        $stunden = IntranetAppBestellungenSettings::resolvedAppSettings()->d3SoapUserGroupsCacheTtlStunden;
-
-        return max(1, (int) $stunden) * 3600;
     }
 
     private function log(string $phase, Bestellung $bestellung, array $context = []): void

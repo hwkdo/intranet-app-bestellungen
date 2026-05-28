@@ -85,7 +85,7 @@
 >
     <x-intranet-app-bestellungen::bestellungen-layout
         :heading="$this->istInterneBestellung() ? 'Interne Bestellung' : 'Externe Bestellung'"
-        subheading="Bestellschein erfassen und zur Freigabe einreichen"
+        subheading="Bestellschein als Entwurf anlegen – Angebote und Freigabe folgen auf der Detailseite"
     >
         <div class="mb-4">
             <flux:button
@@ -596,10 +596,10 @@
                     wire:loading.attr="disabled"
                     wire:target="speichern"
                 >
-                    <span wire:loading.remove wire:target="speichern">Bestellung einreichen</span>
+                    <span wire:loading.remove wire:target="speichern">Entwurf speichern</span>
                     <span wire:loading wire:target="speichern" class="inline-flex items-center gap-2">
                         <flux:icon name="arrow-path" class="size-4 animate-spin" />
-                        Wird eingereicht...
+                        Wird gespeichert...
                     </span>
                 </flux:button>
             </div>

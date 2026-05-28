@@ -15,7 +15,7 @@
         </div>
 
         {{-- Kennzahlen --}}
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <flux:card class="text-center">
                 <flux:heading size="xl">{{ $this->bestellungen->count() }}</flux:heading>
                 <flux:text class="text-zinc-500 text-sm mt-1">Bestellungen</flux:text>
@@ -28,7 +28,15 @@
                 <flux:heading size="xl">{{ $projekt->mitglieder->count() + 1 }}</flux:heading>
                 <flux:text class="text-zinc-500 text-sm mt-1">Beteiligte</flux:text>
             </flux:card>
+            <flux:card class="text-center">
+                <flux:heading size="lg" class="font-mono break-all">{{ $projekt->d3_projekt_id }}</flux:heading>
+                <flux:text class="text-zinc-500 text-sm mt-1">Projekt-ID (D3)</flux:text>
+            </flux:card>
         </div>
+
+        <flux:callout icon="information-circle" variant="secondary" class="mb-6">
+            Die Projekt-ID wird beim D3-Push aller Bestellscheine dieses Projekts gesetzt und verknüpft sie in D3.
+        </flux:callout>
 
         {{-- Begründung --}}
         <flux:card class="mb-6">

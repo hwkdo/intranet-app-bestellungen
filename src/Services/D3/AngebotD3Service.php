@@ -9,6 +9,8 @@ use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
 use Hwkdo\D3RestLaravel\models\Angebot as D3Angebot;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
+use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
+use Hwkdo\IntranetAppBestellungen\Services\Pdf\BestellscheinPdfService;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -18,6 +20,9 @@ class AngebotD3Service
 {
     public function __construct(
         private readonly PdfService $pdfService,
+        private readonly BestellscheinPdfService $bestellscheinPdfService,
+        private readonly D3AbteilungResolver $abteilungResolver,
+        private readonly D3BenutzerResolver $benutzerResolver,
     ) {}
 
     /**
@@ -25,7 +30,7 @@ class AngebotD3Service
      */
     public function push(Angebot $angebot): ?string
     {
-        $angebot->loadMissing('bestellung.user');
+        $angebot->loadMissing('bestellung');
         $bestellung = $angebot->bestellung;
 
         $pdfPath = $this->resolvePdfPath($angebot);
@@ -41,11 +46,11 @@ class AngebotD3Service
             'betreff' => 'Angebot zur Bestellung '.$bestellung->nummer,
             'Nummer' => (int) preg_replace('/\D+/', '', $bestellung->nummer) ?: 0,
             'Erfassungsdatum' => optional($angebot->created_at)->format('Y-m-d'),
-            'Benutzer' => array_filter([optional($bestellung->user)->name]),
+            'Benutzer' => $this->benutzerResolver->resolve($bestellung),
             'Belegdatum' => optional($angebot->created_at)->format('Y-m-d'),
             'Begründung' => $istBegruendung ? 'Ja' : 'Nein',
             'Angebotsnummer' => $angebot->nummer ?? '-',
-            'Abteilung' => array_filter([optional($bestellung->user)->abteilung ?? null]),
+            'Abteilung' => $this->abteilungResolver->resolve($bestellung),
             'doc_type' => DocTypeEnum::Angebote,
             'filename' => basename($pdfPath),
         ]);
@@ -85,23 +90,52 @@ class AngebotD3Service
      */
     public function generateBegruendungPdf(Angebot $angebot): string
     {
-        $angebot->loadMissing('bestellung.user');
+        $angebot->loadMissing('bestellung');
 
         $html = View::make('intranet-app-bestellungen::pdf.angebot-begruendung', [
-            'bestellung' => $angebot->bestellung,
+            ...$this->bestellscheinPdfService->sharedViewData($angebot->bestellung),
             'begruendung' => (string) $angebot->begruendung,
         ])->render();
 
-        $relPath = 'bestellungen/angebote/'.$angebot->bestellung_id.'/begruendung-'.$angebot->getKey().'.pdf';
-        $absDir = Storage::disk('local')->path(dirname($relPath));
+        $relDir = 'bestellungen/angebote/'.$angebot->bestellung_id;
+        $absDir = Storage::disk('local')->path($relDir);
         File::ensureDirectoryExists($absDir);
 
-        $this->pdfService->saveFromHtml($html, $absDir, basename($relPath));
+        // Gotenberg hängt „.pdf“ an outputFilename an – daher ohne Endung übergeben.
+        $savedFilename = $this->pdfService->saveFromHtml(
+            $html,
+            $absDir,
+            'begruendung-'.$angebot->getKey(),
+        );
+
+        $relPath = $relDir.'/'.$savedFilename;
 
         $angebot->pdf_path = $relPath;
         $angebot->save();
 
         return Storage::disk('local')->path($relPath);
+    }
+
+    /**
+     * Überträgt alle noch nicht nach D3 gepushten Angebote/Ausnahme-Begründungen einer Bestellung.
+     *
+     * @throws \RuntimeException wenn ein erforderlicher Push fehlschlägt
+     */
+    public function pushPendingForBestellung(Bestellung $bestellung): void
+    {
+        $bestellung->loadMissing('angebote');
+
+        foreach ($bestellung->angebote->whereNull('d3id') as $angebot) {
+            if ($this->push($angebot) === null) {
+                $label = $angebot->typ === 'begruendung'
+                    ? 'Ausnahme-Begründung'
+                    : 'Vergleichsangebot';
+
+                throw new \RuntimeException(
+                    sprintf('Die D3-Übertragung der %s (ID %d) ist fehlgeschlagen.', $label, $angebot->getKey()),
+                );
+            }
+        }
     }
 
     private function resolvePdfPath(Angebot $angebot): ?string

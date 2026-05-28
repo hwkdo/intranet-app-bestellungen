@@ -6,6 +6,7 @@ namespace Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen;
 
 use App\Models\User;
 use Flux\Flux;
+use Hwkdo\IntranetAppBestellungen\Data\AngebotsregelAuswertung;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
@@ -14,6 +15,7 @@ use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Models\Notiz;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
+use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
@@ -45,6 +47,7 @@ class Detail extends Component
     #[Url(as: 'hinweis')]
     public ?string $hinweisParam = null;
 
+    #[Url(as: 'tab')]
     public string $activeTab = 'positionen';
 
     public bool $d3DokumenteGeladen = false;
@@ -147,15 +150,9 @@ class Detail extends Component
 
     public function kannBestellen(): bool
     {
-        if ($this->bestellung->status !== BestellungStatus::Freigegeben) {
-            return false;
-        }
+        $user = Auth::user();
 
-        if ($this->bestellung->istIntern()) {
-            return (int) Auth::id() === (int) $this->bestellung->interner_empfaenger_user_id;
-        }
-
-        return Auth::user()?->can('manage-app-bestellungen') ?? false;
+        return $user !== null && $this->bestellung->darfVonUserBestelltAbschliessen($user);
     }
 
     #[Computed]
@@ -250,7 +247,20 @@ class Detail extends Component
     public function kannEinreichen(): bool
     {
         return $this->bestellung->user_id === Auth::id()
-            && $this->bestellung->status === BestellungStatus::Entwurf;
+            && $this->bestellung->status === BestellungStatus::Entwurf
+            && $this->angebotsregelAuswertung()->bereit;
+    }
+
+    public function kannAngeboteErfassen(): bool
+    {
+        return $this->bestellung->user_id === Auth::id()
+            && in_array($this->bestellung->status, [BestellungStatus::Entwurf, BestellungStatus::Abgelehnt], true);
+    }
+
+    #[Computed]
+    public function angebotsregelAuswertung(): AngebotsregelAuswertung
+    {
+        return app(AngebotsregelService::class)->auswertung($this->bestellung);
     }
 
     public function freigeben(): void
@@ -377,16 +387,25 @@ class Detail extends Component
         }
 
         try {
-            $this->validate([
-                'einreichenAnUserId' => ['required', 'integer'],
-            ], [
-                'einreichenAnUserId.required' => 'Bitte wählen Sie einen Freigeber aus.',
-            ]);
+            $freigeberId = $this->resolveEinreichFreigeberId();
 
-            app(BestellungWorkflow::class)->einreichen($this->bestellung, Auth::user(), $this->einreichenAnUserId);
+            app(BestellungWorkflow::class)->einreichen($this->bestellung, Auth::user(), $freigeberId);
             Flux::modal('einreichen-modal')->close();
-            Flux::toast(heading: 'Zur Freigabe eingereicht', text: 'Die Bestellung wurde zur Freigabe weitergeleitet.', variant: 'success');
             $this->refreshBestellung();
+
+            if ($this->bestellung->status === BestellungStatus::Freigegeben) {
+                Flux::toast(
+                    heading: 'Bestellung freigegeben',
+                    text: 'Die Bestellung wurde automatisch freigegeben (kein Freigeber erforderlich).',
+                    variant: 'success',
+                );
+            } else {
+                Flux::toast(
+                    heading: 'Zur Freigabe eingereicht',
+                    text: 'Die Bestellung wurde zur Freigabe weitergeleitet.',
+                    variant: 'success',
+                );
+            }
         } catch (\Throwable $e) {
             Flux::toast(heading: 'Fehler', text: $e->getMessage(), variant: 'error');
         }
@@ -398,8 +417,28 @@ class Detail extends Component
             return;
         }
 
+        if (app(WertgrenzenService::class)->istFreigeber1NichtNoetig($this->bestellung)) {
+            $this->einreichen();
+
+            return;
+        }
+
         $this->einreichenAnUserId = null;
         $this->prepareEinreichFreigeberAuswahl();
+
+        if ($this->einreichFreigeberOptionen === []) {
+            $this->einreichen();
+
+            return;
+        }
+
+        if (count($this->einreichFreigeberOptionen) === 1) {
+            $this->einreichenAnUserId = array_key_first($this->einreichFreigeberOptionen);
+            $this->einreichen();
+
+            return;
+        }
+
         Flux::modal('einreichen-modal')->show();
     }
 
@@ -653,51 +692,100 @@ class Detail extends Component
         $this->notizText = '';
         $this->refreshBestellung();
 
-        Flux::toast(heading: 'Notiz hinzugefügt', variant: 'success');
+        Flux::toast(text: 'Die Notiz wurde gespeichert.', heading: 'Notiz hinzugefügt', variant: 'success');
     }
 
     public function angebotSpeichern(): void
     {
+        if (! $this->kannAngeboteErfassen()) {
+            return;
+        }
+
+        if ($this->angebotTyp === 'begruendung') {
+            $this->validate([
+                'angebotTyp' => ['required', 'in:angebot,begruendung'],
+                'angebotBegruendung' => ['required', 'string', 'min:10'],
+            ], [
+                'angebotBegruendung.required' => 'Bitte geben Sie die Ausnahme-Begründung ein.',
+                'angebotBegruendung.min' => 'Die Ausnahme-Begründung muss mindestens 10 Zeichen lang sein.',
+            ]);
+
+            if ($this->bestellung->angebote()->where('typ', 'begruendung')->exists()) {
+                $this->addError('angebotBegruendung', 'Für diese Bestellung existiert bereits eine Ausnahme-Begründung.');
+
+                return;
+            }
+
+            $angebot = Angebot::create([
+                'bestellung_id' => $this->bestellung->getKey(),
+                'user_id' => Auth::id(),
+                'typ' => 'begruendung',
+                'begruendung' => $this->angebotBegruendung,
+            ]);
+
+            app(AngebotD3Service::class)->generateBegruendungPdf($angebot);
+
+            $this->nachAngebotGespeichert($angebot);
+
+            return;
+        }
+
         $this->validate([
             'angebotTyp' => ['required', 'in:angebot,begruendung'],
             'angebotLieferant' => ['nullable', 'string', 'max:255'],
             'angebotNummer' => ['nullable', 'string', 'max:100'],
             'angebotBetrag' => ['nullable', 'numeric'],
-            'angebotBegruendung' => ['nullable', 'string'],
-            'angebotPdf' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+            'angebotPdf' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+        ], [
+            'angebotPdf.required' => 'Bitte laden Sie das Vergleichsangebot als PDF hoch.',
         ]);
 
-        $relPath = null;
-        if ($this->angebotPdf) {
-            $relPath = $this->angebotPdf->store('bestellungen/angebote/'.$this->bestellung->getKey(), 'local');
-        }
+        $relPath = $this->angebotPdf->store('bestellungen/angebote/'.$this->bestellung->getKey(), 'local');
 
         $angebot = Angebot::create([
             'bestellung_id' => $this->bestellung->getKey(),
             'user_id' => Auth::id(),
-            'typ' => $this->angebotTyp,
+            'typ' => 'angebot',
             'lieferantenname' => $this->angebotLieferant,
             'nummer' => $this->angebotNummer,
             'betrag' => $this->angebotBetrag,
-            'begruendung' => $this->angebotBegruendung,
             'pdf_path' => $relPath,
         ]);
 
-        if ($this->angebotTyp === 'begruendung' && filled($this->angebotBegruendung)) {
-            app(AngebotD3Service::class)->generateBegruendungPdf($angebot);
-        }
+        $this->nachAngebotGespeichert($angebot);
+    }
 
+    private function nachAngebotGespeichert(Angebot $angebot): void
+    {
         app(BestellungWorkflow::class)->logAktion(
             $this->bestellung,
             Auth::user(),
             AktionTyp::AngebotHinzugefuegt,
-            payload: ['angebot_id' => $angebot->getKey(), 'typ' => $this->angebotTyp],
+            payload: ['angebot_id' => $angebot->getKey(), 'typ' => $angebot->typ],
         );
 
         $this->reset(['angebotLieferant', 'angebotNummer', 'angebotBetrag', 'angebotBegruendung', 'angebotPdf']);
+        $this->angebotTyp = 'angebot';
         $this->refreshBestellung();
+        unset($this->angebotsregelAuswertung);
 
-        Flux::toast(heading: 'Angebot/Begründung hinzugefügt', variant: 'success');
+        $auswertung = $this->angebotsregelAuswertung();
+
+        Flux::toast(
+            text: $angebot->typ === 'begruendung'
+                ? 'Die Ausnahme-Begründung wurde als PDF gespeichert und kann nach dem Bestellen nach D3 übertragen werden.'
+                : 'Das Vergleichsangebot wurde gespeichert. Die D3-Übertragung erfolgt beim Bestellen.',
+            heading: $angebot->typ === 'begruendung' ? 'Ausnahme-Begründung gespeichert' : 'Vergleichsangebot gespeichert',
+            variant: 'success',
+        );
+
+        if ($auswertung->bereit && $this->bestellung->status === BestellungStatus::Entwurf) {
+            Flux::toast(
+                text: 'Sie können die Bestellung jetzt zur Freigabe einreichen.',
+                heading: 'Angebotsvoraussetzungen erfüllt',
+                variant: 'success',
+            );
+        }
     }
 
     public function moeglicheFreigeberOptions(): array
@@ -752,6 +840,29 @@ class Detail extends Component
             'user', 'freigeber', 'besteller', 'internerEmpfaenger',
             'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user', 'projekt',
         ]);
+    }
+
+    private function resolveEinreichFreigeberId(): ?int
+    {
+        $wertgrenzen = app(WertgrenzenService::class);
+
+        if ($wertgrenzen->istFreigeber1NichtNoetig($this->bestellung)) {
+            return null;
+        }
+
+        $pool = $wertgrenzen->freigeber1FuerBestellung($this->bestellung);
+
+        if ($pool->isEmpty()) {
+            return null;
+        }
+
+        $this->validate([
+            'einreichenAnUserId' => ['required', 'integer'],
+        ], [
+            'einreichenAnUserId.required' => 'Bitte wählen Sie einen Freigeber aus.',
+        ]);
+
+        return $this->einreichenAnUserId;
     }
 
     private function prepareEinreichFreigeberAuswahl(): void

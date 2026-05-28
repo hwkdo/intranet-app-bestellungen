@@ -21,6 +21,7 @@ use Hwkdo\IntranetAppBestellungen\Models\Projekt;
 use Hwkdo\IntranetAppBestellungen\Http\Requests\MeldeFehlendenLieferantRequest;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
+use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\InterneBestellerService;
 use Hwkdo\IntranetAppBestellungen\Services\Lieferant\FehlenderLieferantMeldungService;
@@ -388,10 +389,10 @@ class Erstellen extends Component
         }
 
         return sprintf(
-            'Ab %s € sind mindestens %d Vergleichsangebote oder %s erforderlich.',
+            'Ab %s € sind mindestens %d Vergleichsangebote oder %s erforderlich (auf der Detailseite unter „Angebote / Begründung“).',
             number_format($regel->abBetrag, 2, ',', '.'),
             $regel->mindestAngebote,
-            $regel->begruendungErlaubt ? 'eine ausführliche Begründung' : 'keine Ausnahmen erlaubt',
+            $regel->begruendungErlaubt ? 'eine Ausnahme-Begründung' : 'keine Ausnahmen erlaubt',
         );
     }
 
@@ -602,7 +603,6 @@ class Erstellen extends Component
         }
 
         $service = app(WertgrenzenService::class);
-        $regelService = app(AngebotsregelService::class);
         $workflow = app(BestellungWorkflow::class);
 
         // Frühzeitig prüfen ob der User in dieser Betragsklasse bestellen darf
@@ -612,7 +612,7 @@ class Erstellen extends Component
             return;
         }
 
-        $bestellung = DB::transaction(function () use ($service, $regelService, $workflow): Bestellung {
+        $bestellung = DB::transaction(function () use ($service, $workflow): Bestellung {
             $nummer = app(BenNumberService::class)->next(Auth::user(), $this->haushaltsjahr);
             $lieferanschriftUser = User::query()->find($this->lieferanschriftUserId);
 
@@ -691,33 +691,58 @@ class Erstellen extends Component
             return $bestellung;
         });
 
-        try {
-            app(BestellungWorkflow::class)->einreichen($bestellung, Auth::user());
+        $auswertung = app(AngebotsregelService::class)->auswertung($bestellung);
 
+        if ($auswertung->pruefungAktiv) {
             Flux::toast(
-                heading: 'Bestellung eingereicht',
+                heading: 'Entwurf gespeichert',
+                text: 'Bestellnummer '.$bestellung->nummer.' wurde angelegt. Erfassen Sie unter „Angebote / Begründung“ die Vergleichsangebote oder eine Ausnahme-Begründung und reichen Sie danach zur Freigabe ein.',
+                variant: 'success',
+            );
+
+            $this->redirectRoute('apps.bestellungen.detail', [
+                'bestellung' => $bestellung,
+                'tab' => 'angebote',
+            ]);
+
+            return;
+        }
+
+        try {
+            $bestellung = $workflow->einreichen($bestellung, Auth::user());
+        } catch (WorkflowException $e) {
+            Flux::toast(
+                heading: 'Entwurf gespeichert',
+                text: 'Bestellnummer '.$bestellung->nummer.' wurde angelegt, konnte aber nicht eingereicht werden: '.$e->getMessage(),
+                variant: 'warning',
+            );
+
+            $this->redirectRoute('apps.bestellungen.detail', [
+                'bestellung' => $bestellung,
+            ]);
+
+            return;
+        }
+
+        $bestellung->refresh();
+
+        if ($bestellung->status === BestellungStatus::Freigegeben) {
+            Flux::toast(
+                heading: 'Bestellung freigegeben',
+                text: 'Bestellnummer '.$bestellung->nummer.' wurde angelegt und automatisch freigegeben (kein Freigeber erforderlich). Sie können sie jetzt bestellen.',
+                variant: 'success',
+            );
+        } else {
+            Flux::toast(
+                heading: 'Zur Freigabe eingereicht',
                 text: 'Bestellnummer '.$bestellung->nummer.' wurde zur Freigabe weitergeleitet.',
                 variant: 'success',
             );
-        } catch (\Throwable $e) {
-            if ($e->getMessage() === self::HINWEIS_FREIGEBER_AUSWAHL) {
-                $this->redirectRoute('apps.bestellungen.detail', [
-                    'bestellung' => $bestellung,
-                    'aktion' => 'einreichen',
-                    'hinweis' => 'freigeber',
-                ]);
-
-                return;
-            }
-
-            Flux::toast(
-                heading: 'Hinweis',
-                text: $e->getMessage(),
-                variant: 'warning',
-            );
         }
 
-        $this->redirectRoute('apps.bestellungen.detail', ['bestellung' => $bestellung]);
+        $this->redirectRoute('apps.bestellungen.detail', [
+            'bestellung' => $bestellung,
+        ]);
     }
 
     public function render(): View

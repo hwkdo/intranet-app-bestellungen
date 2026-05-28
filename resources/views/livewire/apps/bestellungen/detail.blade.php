@@ -50,6 +50,12 @@
                             <flux:button size="sm" variant="primary" icon="paper-airplane" wire:click="einreichenModalOeffnen">
                                 Zur Freigabe einreichen
                             </flux:button>
+                        @elseif ($bestellung->status === \Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus::Entwurf && $bestellung->user_id === auth()->id())
+                            <flux:tooltip content="Angebotsvoraussetzungen auf dem Reiter „Angebote / Begründung“ erfüllen">
+                                <flux:button size="sm" variant="primary" icon="paper-airplane" disabled>
+                                    Zur Freigabe einreichen
+                                </flux:button>
+                            </flux:tooltip>
                         @endif
                         @if ($this->kannFreigeben())
                             <flux:button size="sm" variant="primary" icon="check" x-on:click="$flux.modal('freigeben-modal').show()">
@@ -195,20 +201,64 @@
                     </flux:tab.panel>
 
                     <flux:tab.panel name="angebote">
-                        <form wire:submit="angebotSpeichern" class="space-y-3 mb-6">
-                            <div class="grid gap-3 md:grid-cols-2">
-                                <flux:select wire:model="angebotTyp" label="Typ">
-                                    <flux:select.option value="angebot">Vergleichsangebot</flux:select.option>
-                                    <flux:select.option value="begruendung">Ausnahme-Begründung</flux:select.option>
+                        @php($angebotsAuswertung = $this->angebotsregelAuswertung)
+                        <flux:callout
+                            :icon="$angebotsAuswertung->bereit ? 'check-circle' : 'information-circle'"
+                            :variant="$angebotsAuswertung->bereit ? 'success' : 'warning'"
+                            class="mb-4"
+                        >
+                            <flux:callout.heading>Angebotsvoraussetzungen</flux:callout.heading>
+                            <flux:callout.text>
+                                {{ $angebotsAuswertung->zusammenfassung() }}
+                                @if ($angebotsAuswertung->pruefungAktiv)
+                                    <br><span class="text-sm opacity-80">D3-Übertragung von Angeboten und Bestellschein erfolgt erst beim Abschluss „Bestellen“.</span>
+                                @endif
+                            </flux:callout.text>
+                        </flux:callout>
+
+                        @if ($this->kannAngeboteErfassen())
+                            @if ($angebotsAuswertung->hatAusnahmeBegruendung)
+                                <flux:callout icon="information-circle" variant="secondary" class="mb-4">
+                                    Es ist bereits eine Ausnahme-Begründung erfasst. Weitere Vergleichsangebote sind optional.
+                                </flux:callout>
+                            @endif
+
+                            <form wire:submit="angebotSpeichern" class="space-y-3 mb-6">
+                                <flux:select wire:model.live="angebotTyp" label="Typ">
+                                    <flux:select.option value="angebot">Vergleichsangebot (PDF)</flux:select.option>
+                                    @if (! $angebotsAuswertung->hatAusnahmeBegruendung)
+                                        <flux:select.option value="begruendung">Ausnahme-Begründung (Text)</flux:select.option>
+                                    @endif
                                 </flux:select>
-                                <flux:input wire:model="angebotLieferant" label="Lieferant" />
-                                <flux:input wire:model="angebotNummer" label="Angebots-Nr." />
-                                <flux:input wire:model="angebotBetrag" type="number" step="0.01" label="Betrag (€)" />
-                                <flux:textarea wire:model="angebotBegruendung" label="Begründung" rows="3" class="md:col-span-2" />
-                                <flux:input type="file" wire:model="angebotPdf" label="PDF (optional)" class="md:col-span-2" />
-                            </div>
-                            <flux:button type="submit" variant="primary" icon="plus">Angebot/Begründung speichern</flux:button>
-                        </form>
+
+                                @if ($angebotTyp === 'begruendung')
+                                    <flux:textarea
+                                        wire:model="angebotBegruendung"
+                                        label="Ausnahme-Begründung"
+                                        description="Begründet, warum keine Vergleichsangebote vorliegen. Wird automatisch als PDF erzeugt."
+                                        rows="5"
+                                        required
+                                    />
+                                    <flux:error name="angebotBegruendung" />
+                                @else
+                                    <div class="grid gap-3 md:grid-cols-2">
+                                        <flux:input wire:model="angebotLieferant" label="Lieferant (optional)" />
+                                        <flux:input wire:model="angebotNummer" label="Angebots-Nr. (optional)" />
+                                        <flux:input wire:model="angebotBetrag" type="number" step="0.01" label="Betrag (€, optional)" />
+                                        <flux:input type="file" wire:model="angebotPdf" label="Angebots-PDF" accept="application/pdf,.pdf" class="md:col-span-2" />
+                                        <flux:error name="angebotPdf" class="md:col-span-2" />
+                                    </div>
+                                @endif
+
+                                <flux:button type="submit" variant="primary" icon="plus">
+                                    {{ $angebotTyp === 'begruendung' ? 'Ausnahme-Begründung speichern' : 'Vergleichsangebot speichern' }}
+                                </flux:button>
+                            </form>
+                        @else
+                            <flux:text class="text-zinc-500 mb-4">
+                                Angebote können im Status „Entwurf“ oder „Abgelehnt“ ergänzt werden.
+                            </flux:text>
+                        @endif
 
                         @if ($bestellung->angebote->isEmpty())
                             <flux:text class="text-zinc-500">Keine Angebote oder Begründungen erfasst.</flux:text>
@@ -220,6 +270,7 @@
                                     <flux:table.column>Nummer</flux:table.column>
                                     <flux:table.column class="text-right">Betrag</flux:table.column>
                                     <flux:table.column>D3</flux:table.column>
+                                    <flux:table.column>PDF</flux:table.column>
                                 </flux:table.columns>
                                 <flux:table.rows>
                                     @foreach ($bestellung->angebote as $angebot)
@@ -238,9 +289,25 @@
                                             </flux:table.cell>
                                             <flux:table.cell>
                                                 @if ($angebot->d3id)
-                                                    <flux:badge color="emerald" size="sm">übertragen</flux:badge>
+                                                    <flux:badge color="emerald" size="sm">in D3</flux:badge>
                                                 @else
-                                                    <flux:badge color="zinc" size="sm">offen</flux:badge>
+                                                    <flux:badge color="zinc" size="sm">lokal (Push bei Bestellen)</flux:badge>
+                                                @endif
+                                            </flux:table.cell>
+                                            <flux:table.cell>
+                                                @if (filled($angebot->pdf_path) || ($angebot->typ === 'begruendung' && filled($angebot->begruendung)))
+                                                    <flux:button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        icon="document-text"
+                                                        :href="route('apps.bestellungen.angebot.pdf.inline', ['bestellung' => $bestellung, 'angebot' => $angebot])"
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        {{ $angebot->typ === 'begruendung' ? 'Begründung anzeigen' : 'Angebot anzeigen' }}
+                                                    </flux:button>
+                                                @else
+                                                    <flux:text class="text-zinc-400 text-sm">—</flux:text>
                                                 @endif
                                             </flux:table.cell>
                                         </flux:table.row>

@@ -23,11 +23,25 @@ class BestellscheinPdfService
         $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'lieferanschriftUser', 'aktionen.user']);
 
         return View::make('intranet-app-bestellungen::pdf.bestellschein', [
-            'bestellung' => $bestellung,
+            ...$this->sharedViewData($bestellung),
             'typ' => $typ->value,
+        ])->render();
+    }
+
+    /**
+     * Gemeinsame Layout-Daten für Bestellschein und Ausnahme-Begründung (Legacy-Parität).
+     *
+     * @return array{bestellung: Bestellung, lieferant: array<string, ?string>, logoDataUri: string}
+     */
+    public function sharedViewData(Bestellung $bestellung): array
+    {
+        $bestellung->loadMissing(['user', 'besteller', 'lieferanschriftUser']);
+
+        return [
+            'bestellung' => $bestellung,
             'lieferant' => $this->resolveLieferant($bestellung),
             'logoDataUri' => $this->logoDataUri(),
-        ])->render();
+        ];
     }
 
     /**

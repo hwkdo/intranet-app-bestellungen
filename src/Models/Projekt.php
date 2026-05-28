@@ -6,6 +6,7 @@ namespace Hwkdo\IntranetAppBestellungen\Models;
 
 use App\Models\User;
 use Hwkdo\IntranetAppBestellungen\Database\Factories\ProjektFactory;
+use Hwkdo\IntranetAppBestellungen\Services\Projekt\ProjektIdGenerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +25,17 @@ class Projekt extends Model
     protected static function newFactory(): ProjektFactory
     {
         return ProjektFactory::new();
+    }
+
+    protected static function booted(): void
+    {
+        static::creating(function (Projekt $projekt): void {
+            if (filled($projekt->d3_projekt_id)) {
+                return;
+            }
+
+            $projekt->d3_projekt_id = app(ProjektIdGenerator::class)->generate($projekt->name);
+        });
     }
 
     public function ersteller(): BelongsTo

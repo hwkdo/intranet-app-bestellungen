@@ -114,6 +114,30 @@ class Bestellung extends Model
         return $query->where('user_id', $userId);
     }
 
+    public function scopeFreigegeben(Builder $query): Builder
+    {
+        return $query->where('status', BestellungStatus::Freigegeben);
+    }
+
+    public function scopeExtern(Builder $query): Builder
+    {
+        return $query->where('typ', '!=', BestellungTyp::Intern);
+    }
+
+    public function darfVonUserBestelltAbschliessen(User $user): bool
+    {
+        if ($this->status !== BestellungStatus::Freigegeben) {
+            return false;
+        }
+
+        if ($this->istIntern()) {
+            return (int) $this->interner_empfaenger_user_id === (int) $user->getKey();
+        }
+
+        return (int) $this->user_id === (int) $user->getKey()
+            || $user->can('manage-app-bestellungen');
+    }
+
     public function scopeFuerInternenEmpfaenger(Builder $query, int $userId): Builder
     {
         return $query

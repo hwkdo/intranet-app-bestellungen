@@ -11,6 +11,7 @@ use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Models\Aktion;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
+use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
 use Hwkdo\IntranetAppBestellungen\Services\D3\BestellscheinD3Service;
 use Hwkdo\D3RestLaravel\Client as D3Client;
 use Illuminate\Support\Collection;
@@ -22,6 +23,7 @@ class BestellungWorkflow
         private readonly WertgrenzenService $wertgrenzen,
         private readonly AngebotsregelService $angebotsregeln,
         private readonly BestellscheinD3Service $bestellscheinD3Service,
+        private readonly AngebotD3Service $angebotD3Service,
     ) {}
 
     public function einreichen(Bestellung $bestellung, User $user, ?int $freigeberId = null): Bestellung
@@ -141,6 +143,12 @@ class BestellungWorkflow
         $this->ensureStatus($bestellung, [BestellungStatus::Freigegeben]);
         $this->ensureDarfBestellenAbschliessen($bestellung, $user);
 
+        if (! $this->angebotsregeln->istFreigabeReady($bestellung)) {
+            throw new WorkflowException(
+                'Die Angebotsvoraussetzungen sind nicht erfüllt (Vergleichsangebote oder Ausnahme-Begründung).',
+            );
+        }
+
         if (! IntranetAppBestellungenSettings::resolvedAppSettings()->autoPushBeiBestellt) {
             return DB::transaction(function () use ($bestellung, $user, $nachricht): Bestellung {
                 $bestellung->besteller_id = $user->getKey();
@@ -154,9 +162,11 @@ class BestellungWorkflow
         }
 
         try {
+            $this->angebotD3Service->pushPendingForBestellung($bestellung);
+
             $d3Id = $this->bestellscheinD3Service->push($bestellung, $user);
             if (! $d3Id) {
-                throw new WorkflowException('Die D3-Übertragung ist fehlgeschlagen. Die Bestellung bleibt im Status "Freigegeben".');
+                throw new WorkflowException('Die D3-Übertragung des Bestellscheins ist fehlgeschlagen. Die Bestellung bleibt im Status "Freigegeben".');
             }
         } catch (WorkflowException $e) {
             throw $e;
@@ -304,25 +314,17 @@ class BestellungWorkflow
 
     private function ensureDarfBestellenAbschliessen(Bestellung $bestellung, User $user): void
     {
-        if ($bestellung->istIntern()) {
-            if ($bestellung->interner_empfaenger_user_id === null) {
-                throw new WorkflowException('Für interne Bestellungen ist kein interner Empfänger hinterlegt.');
-            }
-
-            if ((int) $bestellung->interner_empfaenger_user_id !== (int) $user->getKey()) {
-                throw new WorkflowException('Nur der interne Empfänger kann diese Bestellung abschließen und an D3 übergeben.');
-            }
-
-            if ($bestellung->benoetigtFinalenLieferantenVorD3()) {
-                throw new WorkflowException(
-                    'Bitte wählen Sie den tatsächlichen Lieferanten, bevor der Bestellschein nach D3 übertragen wird.',
-                );
-            }
-
-            return;
+        if ($bestellung->benoetigtFinalenLieferantenVorD3()) {
+            throw new WorkflowException(
+                'Bitte wählen Sie den tatsächlichen Lieferanten, bevor der Bestellschein nach D3 übertragen wird.',
+            );
         }
 
-        if (! $user->can('manage-app-bestellungen')) {
+        if ($bestellung->istIntern() && $bestellung->interner_empfaenger_user_id === null) {
+            throw new WorkflowException('Für interne Bestellungen ist kein interner Empfänger hinterlegt.');
+        }
+
+        if (! $bestellung->darfVonUserBestelltAbschliessen($user)) {
             throw new WorkflowException('Sie sind nicht berechtigt, diese Bestellung als bestellt zu markieren.');
         }
     }

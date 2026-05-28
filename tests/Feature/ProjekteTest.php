@@ -79,6 +79,8 @@ it('legt ein neues Projekt an', function (): void {
     expect($projekt->user_id)->toBe($user->id);
     expect($projekt->beschreibung)->toBe('Eine Beschreibung');
     expect($projekt->begruendung)->toContain('Gemeinsame fachliche Begründung');
+    expect($projekt->d3_projekt_id)->toBe('neues-projekt');
+    expect(strlen($projekt->d3_projekt_id))->toBeLessThanOrEqual(35);
 });
 
 it('verlangt eine Begründung beim Anlegen eines Projekts', function (): void {
@@ -121,6 +123,8 @@ it('zeigt die Projektdetails mit Bestellungen und Gesamtkosten', function (): vo
     Livewire::actingAs($user)
         ->test(Detail::class, ['projekt' => $projekt])
         ->assertSee('IT-Projekt 2026')
+        ->assertSee($projekt->d3_projekt_id)
+        ->assertSee('Projekt-ID (D3)')
         ->assertSee('Lieferant A')
         ->assertSee('Lieferant B')
         ->assertSee('350,50');
