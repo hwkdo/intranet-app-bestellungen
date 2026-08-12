@@ -6,6 +6,8 @@ namespace Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen;
 
 use App\Models\User;
 use Flux\Flux;
+use Hwkdo\D3RestLaravel\Client as D3Client;
+use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
 use Hwkdo\IntranetAppBestellungen\Data\AngebotsregelAuswertung;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
@@ -21,10 +23,8 @@ use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
 use Hwkdo\IntranetAppBestellungen\Services\Lieferant\LieferantSuggestionsService;
-use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
-use Hwkdo\D3RestLaravel\Client as D3Client;
-use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
+use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -859,7 +859,7 @@ class Detail extends Component
         }
 
         $service = app(WertgrenzenService::class);
-        $pool = $this->bestellung->status === \Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus::ZurZweitenFreigabe
+        $pool = $this->bestellung->status === BestellungStatus::ZurZweitenFreigabe
             ? $service->freigeber2FuerBestellung($this->bestellung)
             : $service->freigeber1FuerBestellung($this->bestellung);
 
@@ -917,17 +917,22 @@ class Detail extends Component
 
             if ($vertretung['is_absent'] === false) {
                 $optionen->put($kandidat->id, $kandidat->name);
+
                 continue;
             }
 
             if ($vertretung['deputy'] instanceof User) {
                 $deputy = $vertretung['deputy'];
-                $optionen->put($deputy->id, $deputy->name);
+                $optionen->put(
+                    $deputy->id,
+                    sprintf('%s (Vertretung für %s)', $deputy->name, $kandidat->name),
+                );
                 $hinweise[] = sprintf(
                     '%s ist in D3 abwesend. Vertretung: %s.',
                     $kandidat->name,
                     $deputy->name,
                 );
+
                 continue;
             }
 

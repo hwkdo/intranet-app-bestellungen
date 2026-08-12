@@ -571,7 +571,7 @@
             </form>
         </flux:modal>
 
-        <flux:modal name="einreichen-modal" :show="false">
+        <flux:modal name="einreichen-modal" class="w-full max-w-2xl" :show="false">
             <form wire:submit="einreichen" class="space-y-4">
                 <flux:heading size="lg">Zur Freigabe einreichen</flux:heading>
                 <flux:text>{{ $bestellung->nummer }} – {{ number_format((float) $bestellung->gesamtbetrag, 2, ',', '.') }} €</flux:text>
@@ -590,9 +590,18 @@
                     </flux:select>
                     <flux:error name="einreichenAnUserId" />
                 </flux:field>
-                @foreach ($this->einreichFreigeberHinweise as $hinweis)
-                    <flux:callout icon="information-circle">{{ $hinweis }}</flux:callout>
-                @endforeach
+                @if ($einreichFreigeberHinweise !== [])
+                    <flux:callout icon="information-circle" variant="secondary">
+                        <flux:callout.heading>Abwesenheiten / Hinweise</flux:callout.heading>
+                        <flux:callout.text>
+                            <ul class="mt-1 max-h-40 list-disc space-y-1 overflow-y-auto pl-4 text-sm">
+                                @foreach ($einreichFreigeberHinweise as $hinweis)
+                                    <li>{{ $hinweis }}</li>
+                                @endforeach
+                            </ul>
+                        </flux:callout.text>
+                    </flux:callout>
+                @endif
                 <div class="flex justify-end gap-2">
                     <flux:modal.close>
                         <flux:button type="button" variant="ghost">Abbrechen</flux:button>
