@@ -184,3 +184,48 @@ it('verlangt eine Begründung beim Erstellen einer Bestellung', function (): voi
         ->call('speichern')
         ->assertHasErrors(['begruendung']);
 });
+
+it('synchronisiert die obere Kostenstelle live mit der ersten Kontierungszeile', function (): void {
+    $user = User::factory()->create();
+
+    Livewire::actingAs($user)
+        ->test(Erstellen::class, ['typ' => 'extern'])
+        ->set('kostenstelle', '4711')
+        ->assertSet('kontierung.0.kostenstelle', '4711')
+        ->set('kontierung.0.kostenstelle', '9999')
+        ->assertSet('kostenstelle', '9999');
+});
+
+it('übernimmt beim Speichern die Kostenstelle aus der ersten Kontierungszeile', function (): void {
+    Storage::fake('public');
+
+    $user = User::factory()->create();
+
+    Livewire::actingAs($user)
+        ->test(Erstellen::class, ['typ' => 'extern'])
+        ->set('lieferantennummer', '12345')
+        ->set('lieferantenname', 'Test GmbH')
+        ->set('kostenstelle', '4711')
+        ->set('kontierung.0.kostenstelle', '8888')
+        ->set('haushaltsjahr', 2026)
+        ->set('betreff', 'Kostenstellen-Sync')
+        ->set('begruendung', 'Begründung für den Test der Kostenstellen-Synchronisation.')
+        ->set('positionen', [[
+            'nr' => 1,
+            'art_id' => null,
+            'art_nr' => null,
+            'oberbegriff' => null,
+            'bezeichnung' => 'Material',
+            'menge' => 1,
+            'einheit' => 'Stk',
+            'preis' => 10.00,
+        ]])
+        ->call('speichern')
+        ->assertRedirect();
+
+    $bestellung = Bestellung::query()->where('betreff', 'Kostenstellen-Sync')->first();
+
+    expect($bestellung)->not->toBeNull()
+        ->and($bestellung->kostenstelle)->toBe('8888')
+        ->and($bestellung->kontierung[0]['kostenstelle'])->toBe('8888');
+});

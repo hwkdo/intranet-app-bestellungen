@@ -509,7 +509,7 @@
                                     <td class="py-2 px-2">
                                         <flux:select
                                             variant="combobox"
-                                            wire:model="kontierung.{{ $kIdx }}.kostenstelle"
+                                            wire:model.live="kontierung.{{ $kIdx }}.kostenstelle"
                                             :filter="false"
                                             clearable
                                             placeholder="Kostenstelle wählen…"

@@ -98,6 +98,8 @@ class Erstellen extends Component
     /** @var array<int, string> */
     public array $kontierungSearch = [];
 
+    private bool $kostenstelleSyncInProgress = false;
+
     private const SUGGEST_LIMIT = 30;
 
     public function mount(string $typ): void
@@ -283,6 +285,18 @@ class Erstellen extends Component
         return (float) collect($this->kontierung)->sum(fn (array $k): float => (float) ($k['aufteilung'] ?? 0));
     }
 
+    public function updatedKostenstelle(mixed $value): void
+    {
+        $this->syncKostenstelleToErsteKontierungZeile();
+    }
+
+    public function updated(string $property): void
+    {
+        if ($property === 'kontierung.0.kostenstelle') {
+            $this->syncErsteKontierungZeileToKostenstelle();
+        }
+    }
+
     public function addKontierung(): void
     {
         $zeile = $this->emptyKontierung();
@@ -300,6 +314,8 @@ class Erstellen extends Component
         unset($this->kontierungSearch[$idx]);
         $this->kontierung = array_values($this->kontierung);
         $this->kontierungSearch = array_values($this->kontierungSearch);
+
+        $this->syncErsteKontierungZeileToKostenstelle();
     }
 
     #[Computed]
@@ -590,6 +606,7 @@ class Erstellen extends Component
     {
         $this->normalizePdfPositionen();
         $this->ensureLieferantennameFromCache();
+        $this->alignKostenstelleBeforeSave();
         $this->validate();
 
         foreach ($this->positionen as $idx => $position) {
@@ -623,7 +640,7 @@ class Erstellen extends Component
                 'interner_empfaenger_user_id' => $this->istInterneBestellung() ? $this->internerEmpfaengerUserId : null,
                 'lieferantennummer' => $this->lieferantennummer,
                 'lieferantenname' => $this->lieferantenname,
-                'kostenstelle' => $this->kostenstelle,
+                'kostenstelle' => $this->resolvedKostenstelle(),
                 'haushaltsjahr' => $this->haushaltsjahr,
                 'betreff' => $this->betreff,
                 'begruendung' => $this->begruendung,
@@ -817,6 +834,62 @@ class Erstellen extends Component
             'raum' => null,
             'aufteilung' => 100.0,
         ];
+    }
+
+    private function syncKostenstelleToErsteKontierungZeile(): void
+    {
+        if ($this->kostenstelleSyncInProgress || ! isset($this->kontierung[0])) {
+            return;
+        }
+
+        $ersteZeile = $this->kontierung[0]['kostenstelle'] ?? null;
+
+        if ($ersteZeile === $this->kostenstelle) {
+            return;
+        }
+
+        $this->kostenstelleSyncInProgress = true;
+        $this->kontierung[0]['kostenstelle'] = $this->kostenstelle;
+        $this->kostenstelleSyncInProgress = false;
+    }
+
+    private function syncErsteKontierungZeileToKostenstelle(): void
+    {
+        if ($this->kostenstelleSyncInProgress || ! isset($this->kontierung[0])) {
+            return;
+        }
+
+        $ersteZeile = $this->kontierung[0]['kostenstelle'] ?? null;
+
+        if ($ersteZeile === $this->kostenstelle) {
+            return;
+        }
+
+        $this->kostenstelleSyncInProgress = true;
+        $this->kostenstelle = $ersteZeile;
+        $this->kostenstelleSyncInProgress = false;
+    }
+
+    private function alignKostenstelleBeforeSave(): void
+    {
+        $resolved = $this->resolvedKostenstelle();
+
+        $this->kostenstelle = $resolved;
+
+        if (isset($this->kontierung[0])) {
+            $this->kontierung[0]['kostenstelle'] = $resolved;
+        }
+    }
+
+    private function resolvedKostenstelle(): ?string
+    {
+        $ersteZeile = $this->kontierung[0]['kostenstelle'] ?? null;
+
+        if (filled($ersteZeile)) {
+            return $ersteZeile;
+        }
+
+        return $this->kostenstelle;
     }
 
     /**
