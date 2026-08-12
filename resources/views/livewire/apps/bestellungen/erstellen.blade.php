@@ -36,6 +36,9 @@
         total() {
             return Object.values(this.rowTotals).reduce((sum, val) => sum + Number(val || 0), 0);
         },
+        bruttoTotal() {
+            return this.total() * 1.19;
+        },
         formatEuro(value) {
             return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
         },
@@ -318,8 +321,8 @@
                                 <th class="py-2 px-2 text-left w-28">Art.-Nr.</th>
                                 <th class="py-2 px-2 text-right w-20">Menge</th>
                                 <th class="py-2 px-2 text-left w-20">Einh.</th>
-                                <th class="py-2 px-2 text-right w-28">Einzelpreis</th>
-                                <th class="py-2 px-2 text-right w-28">Gesamt</th>
+                                <th class="py-2 px-2 text-right w-28">Einzelpreis (netto)</th>
+                                <th class="py-2 px-2 text-right w-28">Gesamt (netto)</th>
                                 <th class="py-2 px-2 text-left w-44">Anlage</th>
                                 <th class="py-2 pl-2 w-10"></th>
                             </tr>
@@ -412,7 +415,7 @@
                                                 x-on:input="setRowTotal({{ $idx }}, 1, $event.target.value)"
                                                 type="number"
                                                 step="0.01"
-                                                placeholder="Gesamtpreis"
+                                                placeholder="Gesamtpreis (netto)"
                                                 class="text-right"
                                             />
                                             <flux:error name="positionen.{{ $idx }}.preis" />
@@ -463,10 +466,20 @@
                     </table>
                 </div>
 
-                <div class="mt-4 text-right">
+                <div class="mt-4 flex flex-col items-end gap-1 text-right">
                     <flux:heading size="md">
-                        Gesamt: <span class="text-emerald-600 dark:text-emerald-400"><span x-text="formatEuro(total())"></span> €</span>
+                        Gesamtpreis (netto):
+                        <span class="text-emerald-600 dark:text-emerald-400 tabular-nums">
+                            <span x-text="formatEuro(total())"></span> €
+                        </span>
                     </flux:heading>
+                    <flux:text class="text-sm text-zinc-600 dark:text-zinc-400">
+                        Gesamtpreis (brutto):
+                        <span class="font-medium tabular-nums text-zinc-900 dark:text-white">
+                            <span x-text="formatEuro(bruttoTotal())"></span> €
+                        </span>
+                        <span class="text-zinc-500">(inkl. 19&nbsp;% USt.)</span>
+                    </flux:text>
                 </div>
             </flux:card>
 
