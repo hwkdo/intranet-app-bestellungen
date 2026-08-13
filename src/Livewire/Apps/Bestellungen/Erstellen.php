@@ -783,7 +783,7 @@ class Erstellen extends Component
         $term = trim($search);
 
         $results = KostenstelleCache::query()
-            ->where('aktiv', true)
+            ->aktiv()
             ->when($term !== '', function ($q) use ($term): void {
                 $like = '%'.$term.'%';
                 $q->where(function ($inner) use ($like): void {

@@ -8,6 +8,7 @@ use Hwkdo\BueLaravel\Facades\BueLaravel;
 use Hwkdo\IntranetAppBestellungen\Models\KostenstelleCache;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Support\Utf8MojibakeFixer;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class StammdatenSyncService
@@ -53,12 +54,13 @@ class StammdatenSyncService
     }
 
     /**
-     * @return array{count:int}
+     * @return array{count:int, deactivated:int}
      */
     public function syncKostenstellen(): array
     {
-        $count = 0;
         $now = now();
+        /** @var array<string, array<string, mixed>> $rowsByNummer */
+        $rowsByNummer = [];
 
         foreach (BueLaravel::getKostenstellen() as $row) {
             $row = (array) $row;
@@ -67,20 +69,45 @@ class StammdatenSyncService
                 continue;
             }
 
-            KostenstelleCache::updateOrCreate(
-                ['kostenstelle' => $nummer],
-                [
-                    'bezeichnung' => $row['kobe'] ?? $row['bezeichnung'] ?? null,
-                    'aktiv' => isset($row['aktiv']) ? (bool) $row['aktiv'] : true,
-                    'synced_at' => $now,
-                ],
-            );
-            $count++;
+            $rowsByNummer[$nummer] = $row;
         }
 
-        Log::info('bestellungen.stammdaten_sync.kostenstellen', ['count' => $count]);
+        if ($rowsByNummer === []) {
+            Log::warning('bestellungen.stammdaten_sync.kostenstellen_empty', [
+                'message' => 'Quelle lieferte keine Kostenstellen. Cache bleibt unverändert.',
+            ]);
 
-        return ['count' => $count];
+            return ['count' => 0, 'deactivated' => 0];
+        }
+
+        return DB::transaction(function () use ($now, $rowsByNummer): array {
+            $nummern = array_map(strval(...), array_keys($rowsByNummer));
+
+            foreach ($rowsByNummer as $nummer => $row) {
+                KostenstelleCache::updateOrCreate(
+                    ['kostenstelle' => (string) $nummer],
+                    [
+                        'bezeichnung' => $row['kobe'] ?? $row['bezeichnung'] ?? null,
+                        'aktiv' => isset($row['aktiv']) ? (bool) $row['aktiv'] : true,
+                        'synced_at' => $now,
+                    ],
+                );
+            }
+
+            $deactivated = KostenstelleCache::query()
+                ->where('aktiv', true)
+                ->whereNotIn('kostenstelle', $nummern)
+                ->update(['aktiv' => false]);
+
+            $count = count($rowsByNummer);
+
+            Log::info('bestellungen.stammdaten_sync.kostenstellen', [
+                'count' => $count,
+                'deactivated' => $deactivated,
+            ]);
+
+            return ['count' => $count, 'deactivated' => $deactivated];
+        });
     }
 
     public function syncAlle(): array

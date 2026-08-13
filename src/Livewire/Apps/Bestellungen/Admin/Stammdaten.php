@@ -9,16 +9,28 @@ use Hwkdo\IntranetAppBestellungen\Models\KostenstelleCache;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Services\Stammdaten\LieferantNutzungSyncService;
 use Hwkdo\IntranetAppBestellungen\Services\Stammdaten\StammdatenSyncService;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class Stammdaten extends Component
 {
+    use WithPagination;
+
+    private const KOSTENSTELLEN_PER_PAGE = 25;
+
+    private const KOSTENSTELLEN_PAGE_NAME = 'kostenstellenPage';
+
     public string $aktiveTab = 'lieferanten';
 
     public string $search = '';
+
+    /** @var 'alle'|'aktiv'|'inaktiv' */
+    public string $kostenstellenStatus = 'alle';
 
     /** @var 'name'|'nummer'|'nutzung'|'legacy'|'v3' */
     public string $lieferantenSortBy = 'name';
@@ -67,13 +79,58 @@ class Stammdaten extends Component
     }
 
     #[Computed]
-    public function kostenstellen()
+    public function kostenstellen(): LengthAwarePaginator
     {
-        return KostenstelleCache::query()
-            ->when($this->search, fn ($q) => $q->where('bezeichnung', 'like', '%'.$this->search.'%'))
+        return $this->kostenstellenQuery()
             ->orderBy('kostenstelle')
-            ->limit(200)
-            ->get();
+            ->paginate(self::KOSTENSTELLEN_PER_PAGE, pageName: self::KOSTENSTELLEN_PAGE_NAME);
+    }
+
+    #[Computed]
+    public function kostenstellenGesamt(): int
+    {
+        return KostenstelleCache::query()->count();
+    }
+
+    public function kostenstellenZaehlerText(): string
+    {
+        $gesamt = $this->kostenstellenGesamt;
+        $gefiltert = $this->kostenstellen->total();
+        $von = $this->kostenstellen->firstItem();
+        $bis = $this->kostenstellen->lastItem();
+
+        $gesamtFormatiert = number_format($gesamt, 0, ',', '.');
+
+        if ($gefiltert === 0) {
+            return sprintf('Keine Treffer · %s insgesamt', $gesamtFormatiert);
+        }
+
+        $bereich = sprintf(
+            '%s–%s von %s',
+            number_format((int) $von, 0, ',', '.'),
+            number_format((int) $bis, 0, ',', '.'),
+            number_format($gefiltert, 0, ',', '.'),
+        );
+
+        if ($this->search === '' && $this->kostenstellenStatus === 'alle') {
+            return $bereich.' insgesamt';
+        }
+
+        return $bereich.' gefiltert · '.$gesamtFormatiert.' insgesamt';
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->resetKostenstellenPage();
+    }
+
+    public function updatedKostenstellenStatus(): void
+    {
+        if (! in_array($this->kostenstellenStatus, ['alle', 'aktiv', 'inaktiv'], true)) {
+            $this->kostenstellenStatus = 'alle';
+        }
+
+        $this->resetKostenstellenPage();
     }
 
     public function syncJetzt(string $typ): void
@@ -87,13 +144,18 @@ class Stammdaten extends Component
             }
             if ($typ === 'kostenstellen') {
                 $result = $service->syncKostenstellen();
-                Flux::toast(heading: 'Kostenstellen aktualisiert', text: $result['count'].' Einträge.', variant: 'success');
+                Flux::toast(
+                    heading: 'Kostenstellen aktualisiert',
+                    text: $result['count'].' Einträge, '.$result['deactivated'].' als inaktiv markiert.',
+                    variant: 'success',
+                );
             }
         } catch (\Throwable $e) {
             Flux::toast(heading: 'Sync fehlgeschlagen', text: $e->getMessage(), variant: 'error');
         }
 
-        unset($this->lieferanten, $this->kostenstellen);
+        unset($this->lieferanten, $this->kostenstellen, $this->kostenstellenGesamt);
+        $this->resetKostenstellenPage();
     }
 
     public function sortLieferantenBy(string $column): void
@@ -131,5 +193,25 @@ class Stammdaten extends Component
     public function render(): View
     {
         return view('intranet-app-bestellungen::livewire.apps.bestellungen.admin.stammdaten');
+    }
+
+    private function kostenstellenQuery(): Builder
+    {
+        return KostenstelleCache::query()
+            ->when($this->kostenstellenStatus === 'aktiv', fn (Builder $q) => $q->aktiv())
+            ->when($this->kostenstellenStatus === 'inaktiv', fn (Builder $q) => $q->inaktiv())
+            ->when($this->search !== '', function (Builder $q): void {
+                $like = '%'.$this->search.'%';
+                $q->where(function (Builder $inner) use ($like): void {
+                    $inner->where('bezeichnung', 'like', $like)
+                        ->orWhere('kostenstelle', 'like', $like);
+                });
+            });
+    }
+
+    private function resetKostenstellenPage(): void
+    {
+        $this->resetPage(pageName: self::KOSTENSTELLEN_PAGE_NAME);
+        unset($this->kostenstellen);
     }
 }

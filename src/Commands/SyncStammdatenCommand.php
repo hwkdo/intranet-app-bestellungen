@@ -27,7 +27,11 @@ class SyncStammdatenCommand extends Command
 
         if ($onlyKostenstellen || (! $onlyLieferanten && ! $onlyKostenstellen)) {
             $result = $service->syncKostenstellen();
-            $this->info(sprintf('%d Kostenstellen synchronisiert.', $result['count']));
+            $this->info(sprintf(
+                '%d Kostenstellen synchronisiert, %d als inaktiv markiert.',
+                $result['count'],
+                $result['deactivated'],
+            ));
         }
 
         return self::SUCCESS;

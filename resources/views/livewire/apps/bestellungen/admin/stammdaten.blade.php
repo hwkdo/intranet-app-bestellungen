@@ -101,11 +101,17 @@
         </flux:tab.panel>
 
         <flux:tab.panel name="kostenstellen">
-            <div class="flex items-center gap-3 mb-3">
-                <flux:input wire:model.live.debounce.300ms="search" placeholder="Kostenstelle suchen…" class="flex-1" icon="magnifying-glass" />
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <flux:input wire:model.live.debounce.300ms="search" placeholder="Kostenstelle suchen…" class="flex-1 min-w-56" icon="magnifying-glass" />
+                <flux:radio.group wire:model.live="kostenstellenStatus" variant="segmented" size="sm">
+                    <flux:radio value="alle">Alle</flux:radio>
+                    <flux:radio value="aktiv">Nur aktive</flux:radio>
+                    <flux:radio value="inaktiv">Nur inaktive</flux:radio>
+                </flux:radio.group>
                 <flux:button icon="arrow-path" wire:click="syncJetzt('kostenstellen')">Jetzt synchronisieren</flux:button>
             </div>
-            <flux:table>
+            <p class="text-sm text-zinc-500 mb-3">{{ $this->kostenstellenZaehlerText() }}</p>
+            <flux:table :paginate="$this->kostenstellen">
                 <flux:table.columns>
                     <flux:table.column>Kostenstelle</flux:table.column>
                     <flux:table.column>Bezeichnung</flux:table.column>
@@ -113,7 +119,7 @@
                     <flux:table.column>Synchronisiert</flux:table.column>
                 </flux:table.columns>
                 <flux:table.rows>
-                    @foreach ($this->kostenstellen as $kst)
+                    @forelse ($this->kostenstellen as $kst)
                         <flux:table.row :key="$kst->id">
                             <flux:table.cell>{{ $kst->kostenstelle }}</flux:table.cell>
                             <flux:table.cell>{{ $kst->bezeichnung }}</flux:table.cell>
@@ -126,7 +132,11 @@
                             </flux:table.cell>
                             <flux:table.cell>{{ $kst->synced_at?->format('d.m.Y H:i') }}</flux:table.cell>
                         </flux:table.row>
-                    @endforeach
+                    @empty
+                        <flux:table.row>
+                            <flux:table.cell colspan="4">Keine Kostenstellen gefunden.</flux:table.cell>
+                        </flux:table.row>
+                    @endforelse
                 </flux:table.rows>
             </flux:table>
         </flux:tab.panel>
