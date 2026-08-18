@@ -150,9 +150,56 @@ class Bestellung extends Model
         return $query->where('status', BestellungStatus::Freigegeben);
     }
 
+    /**
+     * Offene Bestellungen des Anforderers, bei denen Freigabe oder Bestellung bei jemand anderem liegt.
+     *
+     * @param  Builder<Bestellung>  $query
+     * @return Builder<Bestellung>
+     */
+    public function scopeWartendFuerAnforderer(Builder $query, int $userId): Builder
+    {
+        return $query
+            ->where('user_id', $userId)
+            ->where(function (Builder $q) use ($userId): void {
+                $q->where(function (Builder $q) use ($userId): void {
+                    $q->freigabePending()
+                        ->where(function (Builder $q) use ($userId): void {
+                            $q->whereNull('freigeber_id')
+                                ->orWhere('freigeber_id', '!=', $userId);
+                        });
+                })->orWhere(function (Builder $q) use ($userId): void {
+                    $q->where('status', BestellungStatus::Freigegeben)
+                        ->where('typ', BestellungTyp::Intern)
+                        ->whereNotNull('interner_empfaenger_user_id')
+                        ->where('interner_empfaenger_user_id', '!=', $userId);
+                });
+            });
+    }
+
     public function istInternBearbeitungOffen(): bool
     {
         return $this->istIntern() && $this->status === BestellungStatus::Freigegeben;
+    }
+
+    public function wartehinweisFuerAnforderer(): string
+    {
+        if ($this->status?->isFreigabePending()) {
+            $name = trim((string) ($this->freigeber?->name ?? ''));
+
+            return $name !== ''
+                ? 'Wartet auf Freigabe durch '.$name
+                : 'Wartet auf Freigabe';
+        }
+
+        if ($this->status === BestellungStatus::Freigegeben) {
+            $name = trim((string) ($this->internerEmpfaenger?->name ?? ''));
+
+            return $name !== ''
+                ? 'Wartet auf Bestellung durch '.$name
+                : 'Wartet auf Bestellung';
+        }
+
+        return $this->status?->label() ?? '';
     }
 
     public function refreshGesamtbetrag(): void

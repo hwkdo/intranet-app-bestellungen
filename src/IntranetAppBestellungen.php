@@ -4,14 +4,20 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppBestellungen;
 
+use Hwkdo\IntranetAppBase\Interfaces\DashboardWidgetProviderInterface;
 use Hwkdo\IntranetAppBase\Interfaces\IntranetAppInterface;
+use Hwkdo\IntranetAppBase\Interfaces\ProvidesDashboardWidgetsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
+use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
+use Hwkdo\IntranetAppBestellungen\Dashboard\BestellungenDashboardWidgetProvider;
+use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
+use Hwkdo\IntranetAppBestellungen\Data\UserSettings;
 use Hwkdo\IntranetAppBestellungen\Tasks\BestellungAusfuehrenTaskProvider;
 use Hwkdo\IntranetAppBestellungen\Tasks\FreigabeAusstehendTaskProvider;
 use Hwkdo\IntranetAppBestellungen\Tasks\InterneBestellungAusstehendTaskProvider;
 use Illuminate\Support\Collection;
 
-class IntranetAppBestellungen implements IntranetAppInterface, ProvidesTasksInterface
+class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesTasksInterface
 {
     public static function app_name(): string
     {
@@ -40,12 +46,12 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesTasksInte
 
     public static function userSettingsClass(): ?string
     {
-        return \Hwkdo\IntranetAppBestellungen\Data\UserSettings::class;
+        return UserSettings::class;
     }
 
     public static function appSettingsClass(): ?string
     {
-        return \Hwkdo\IntranetAppBestellungen\Data\AppSettings::class;
+        return AppSettings::class;
     }
 
     public static function mcpServers(): array
@@ -54,7 +60,7 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesTasksInte
     }
 
     /**
-     * @return array<class-string<\Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface>>
+     * @return array<class-string<TaskProviderInterface>>
      */
     public static function taskProviders(): array
     {
@@ -62,6 +68,16 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesTasksInte
             FreigabeAusstehendTaskProvider::class,
             BestellungAusfuehrenTaskProvider::class,
             InterneBestellungAusstehendTaskProvider::class,
+        ];
+    }
+
+    /**
+     * @return array<class-string<DashboardWidgetProviderInterface>>
+     */
+    public static function dashboardWidgetProviders(): array
+    {
+        return [
+            BestellungenDashboardWidgetProvider::class,
         ];
     }
 }

@@ -34,6 +34,11 @@ enum BestellungStatus: string
         return in_array($this, [self::ZurFreigabe, self::ZurZweitenFreigabe], true);
     }
 
+    public function isInBearbeitung(): bool
+    {
+        return in_array($this, [self::ZurFreigabe, self::ZurZweitenFreigabe, self::Freigegeben], true);
+    }
+
     public function isFinal(): bool
     {
         return in_array($this, [self::Bestellt, self::Abgelehnt], true);
