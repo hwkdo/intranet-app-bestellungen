@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppBestellungen;
 
+use Hwkdo\IntranetAppBase\Data\NotificationTypeDefinition;
 use Hwkdo\IntranetAppBase\Interfaces\DashboardWidgetProviderInterface;
 use Hwkdo\IntranetAppBase\Interfaces\IntranetAppInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesDashboardWidgetsInterface;
+use Hwkdo\IntranetAppBase\Interfaces\ProvidesNotificationsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
 use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
 use Hwkdo\IntranetAppBestellungen\Dashboard\BestellungenDashboardWidgetProvider;
@@ -17,7 +19,7 @@ use Hwkdo\IntranetAppBestellungen\Tasks\FreigabeAusstehendTaskProvider;
 use Hwkdo\IntranetAppBestellungen\Tasks\InterneBestellungAusstehendTaskProvider;
 use Illuminate\Support\Collection;
 
-class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesTasksInterface
+class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesTasksInterface
 {
     public static function app_name(): string
     {
@@ -78,6 +80,20 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboard
     {
         return [
             BestellungenDashboardWidgetProvider::class,
+        ];
+    }
+
+    public static function notificationTypes(): array
+    {
+        return [
+            new NotificationTypeDefinition(
+                key: 'bestellungen.order_approved',
+                label: 'Bestellung freigegeben',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                description: 'Ihre Bestellung wurde freigegeben und kann bestellt werden.',
+                mandatory: true,
+            ),
         ];
     }
 }

@@ -7,6 +7,7 @@ namespace Hwkdo\IntranetAppBestellungen\Services;
 use App\Models\User;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
+use Hwkdo\IntranetAppBestellungen\Notifications\BestellungFreigegebenNotification;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Models\Aktion;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
@@ -131,6 +132,17 @@ class BestellungWorkflow
         });
     }
 
+    private function notifyAnfordererFreigegeben(Bestellung $bestellung): void
+    {
+        $bestellung->loadMissing('user');
+
+        if ($bestellung->user === null) {
+            return;
+        }
+
+        $bestellung->user->notify(new BestellungFreigegebenNotification($bestellung->fresh()));
+    }
+
     public function ablehnen(Bestellung $bestellung, User $user, string $nachricht): Bestellung
     {
         $this->ensureStatus($bestellung, [BestellungStatus::ZurFreigabe, BestellungStatus::ZurZweitenFreigabe]);
@@ -223,7 +235,7 @@ class BestellungWorkflow
         AktionTyp $aktion,
         ?string $nachricht = null,
     ): Bestellung {
-        return DB::transaction(function () use ($bestellung, $user, $neuerStatus, $aktion, $nachricht): Bestellung {
+        $result = DB::transaction(function () use ($bestellung, $user, $neuerStatus, $aktion, $nachricht): Bestellung {
             $vorherStatus = $bestellung->status?->value;
 
             $bestellung->status = $neuerStatus;
@@ -240,6 +252,12 @@ class BestellungWorkflow
 
             return $bestellung->refresh();
         });
+
+        if ($neuerStatus === BestellungStatus::Freigegeben) {
+            $this->notifyAnfordererFreigegeben($result);
+        }
+
+        return $result;
     }
 
     /**
