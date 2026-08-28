@@ -13,7 +13,6 @@ use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
 use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
 use Hwkdo\IntranetAppBestellungen\Dashboard\BestellungenDashboardWidgetProvider;
 use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
-use Hwkdo\IntranetAppBestellungen\Data\UserSettings;
 use Hwkdo\IntranetAppBestellungen\Tasks\BestellungAusfuehrenTaskProvider;
 use Hwkdo\IntranetAppBestellungen\Tasks\FreigabeAusstehendTaskProvider;
 use Hwkdo\IntranetAppBestellungen\Tasks\InterneBestellungAusstehendTaskProvider;
@@ -48,7 +47,7 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboard
 
     public static function userSettingsClass(): ?string
     {
-        return UserSettings::class;
+        return null;
     }
 
     public static function appSettingsClass(): ?string
