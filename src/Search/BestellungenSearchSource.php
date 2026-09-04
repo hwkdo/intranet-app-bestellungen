@@ -56,10 +56,39 @@ class BestellungenSearchSource implements SearchSourceInterface
                 appIdentifier: $this->appIdentifier(),
                 appName: $this->appName(),
                 icon: $this->icon(),
+                favoriteKey: $this->key().':'.$bestellung->id,
                 subtitle: $this->subtitle($bestellung),
                 sourceKey: $this->key(),
             ))
             ->values();
+    }
+
+    public function resolveFavorite(string $entityId, Authenticatable $user): ?SearchResult
+    {
+        if (! $this->isAvailableFor($user)) {
+            return null;
+        }
+
+        $bestellung = Bestellung::query()
+            ->with(['projekt'])
+            ->visibleTo($user)
+            ->whereKey($entityId)
+            ->first();
+
+        if ($bestellung === null) {
+            return null;
+        }
+
+        return new SearchResult(
+            title: $bestellung->nummer.' – '.($bestellung->betreff ?: 'Ohne Betreff'),
+            url: route('apps.bestellungen.detail', $bestellung),
+            appIdentifier: $this->appIdentifier(),
+            appName: $this->appName(),
+            icon: $this->icon(),
+            favoriteKey: $this->key().':'.$bestellung->id,
+            subtitle: $this->subtitle($bestellung),
+            sourceKey: $this->key(),
+        );
     }
 
     private function subtitle(Bestellung $bestellung): ?string
