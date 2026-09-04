@@ -19,12 +19,22 @@ class PdfController extends Controller
 
     public function inline(Bestellung $bestellung, string $typ = 'intern'): Response
     {
+        $this->ensureVisible($bestellung);
+
         return $this->pdfService->inline($bestellung, $this->resolveTyp($typ));
     }
 
     public function download(Bestellung $bestellung, string $typ = 'intern'): Response
     {
+        $this->ensureVisible($bestellung);
+
         return $this->pdfService->download($bestellung, $this->resolveTyp($typ));
+    }
+
+    private function ensureVisible(Bestellung $bestellung): void
+    {
+        $user = auth()->user();
+        abort_unless($user !== null && $bestellung->istSichtbarFuer($user), 403);
     }
 
     private function resolveTyp(string $typ): BestellungTyp

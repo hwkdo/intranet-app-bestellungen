@@ -20,6 +20,9 @@ class AngebotPdfController extends Controller
     {
         abort_unless((int) $angebot->bestellung_id === (int) $bestellung->getKey(), 404);
 
+        $user = auth()->user();
+        abort_unless($user !== null && $bestellung->istSichtbarFuer($user), 403);
+
         return $this->pdfService->inline($angebot);
     }
 }

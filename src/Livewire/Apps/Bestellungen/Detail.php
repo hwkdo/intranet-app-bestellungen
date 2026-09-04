@@ -113,6 +113,11 @@ class Detail extends Component
             'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user', 'projekt',
         ]);
 
+        abort_unless(
+            Auth::user() !== null && $this->bestellung->istSichtbarFuer(Auth::user()),
+            403,
+        );
+
         if ($this->aktionParam === 'freigeben' && $this->kannFreigeben()) {
             Flux::modal('freigeben-modal')->show();
         }

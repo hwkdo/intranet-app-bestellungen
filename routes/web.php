@@ -25,6 +25,10 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])->group(function (
         ->name('apps.bestellungen.meine');
 
 
+    Route::get('apps/bestellungen/suche', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Search::class)
+        ->name('apps.bestellungen.search');
+
+
     Route::get('apps/bestellungen/freigaben', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Freigaben::class)
         ->name('apps.bestellungen.freigaben');
 

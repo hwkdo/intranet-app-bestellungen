@@ -11,6 +11,7 @@
         ['label' => 'Übersicht', 'href' => route('apps.bestellungen.index'), 'icon' => 'home', 'description' => 'Zurück zur Übersicht', 'buttonText' => 'Übersicht anzeigen'],
         ['label' => 'Neue Bestellung', 'href' => route('apps.bestellungen.erstellen'), 'icon' => 'plus-circle', 'description' => 'Neue Bestellung anlegen', 'buttonText' => 'Bestellung erstellen'],
         ['label' => 'Meine Bestellungen', 'href' => route('apps.bestellungen.meine'), 'icon' => 'document-text', 'description' => 'Meine Bestellungen anzeigen', 'buttonText' => 'Meine Bestellungen'],
+        ['label' => 'Suche', 'href' => route('apps.bestellungen.search'), 'icon' => 'magnifying-glass', 'description' => 'Bestellungen nach BEN, Betreff, Projekt oder Position suchen', 'buttonText' => 'Suche öffnen'],
         ['label' => 'Projekte', 'href' => route('apps.bestellungen.projekte.index'), 'icon' => 'folder', 'description' => 'Bestellungen in Projekten bündeln', 'buttonText' => 'Projekte öffnen'],
         ['label' => 'Freigaben', 'href' => route('apps.bestellungen.freigaben'), 'icon' => 'check-badge', 'description' => 'Bestellungen zur Freigabe', 'buttonText' => 'Freigaben öffnen'],
     ];

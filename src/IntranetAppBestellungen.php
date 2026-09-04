@@ -11,16 +11,19 @@ use Hwkdo\IntranetAppBase\Interfaces\IntranetAppInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesDashboardWidgetsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesNotificationsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesSearchActionsInterface;
+use Hwkdo\IntranetAppBase\Interfaces\ProvidesSearchInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
+use Hwkdo\IntranetAppBase\Interfaces\SearchSourceInterface;
 use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
 use Hwkdo\IntranetAppBestellungen\Dashboard\BestellungenDashboardWidgetProvider;
 use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
+use Hwkdo\IntranetAppBestellungen\Search\BestellungenSearchSource;
 use Hwkdo\IntranetAppBestellungen\Tasks\BestellungAusfuehrenTaskProvider;
 use Hwkdo\IntranetAppBestellungen\Tasks\FreigabeAusstehendTaskProvider;
 use Hwkdo\IntranetAppBestellungen\Tasks\InterneBestellungAusstehendTaskProvider;
 use Illuminate\Support\Collection;
 
-class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesSearchActionsInterface, ProvidesTasksInterface
+class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesSearchActionsInterface, ProvidesSearchInterface, ProvidesTasksInterface
 {
     public static function app_name(): string
     {
@@ -113,6 +116,28 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboard
                 subtitle: self::app_name(),
                 sort: 100,
             ),
+            new SearchActionDefinition(
+                key: 'bestellungen.search',
+                title: 'Bestellungen suchen',
+                keywords: ['bestellung suchen', 'bestellungen suchen', 'ben suchen', 'suche bestellung'],
+                routeName: 'apps.bestellungen.search',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                icon: 'magnifying-glass',
+                permission: 'see-app-bestellungen',
+                subtitle: self::app_name(),
+                sort: 110,
+            ),
+        ];
+    }
+
+    /**
+     * @return list<class-string<SearchSourceInterface>>
+     */
+    public static function searchSources(): array
+    {
+        return [
+            BestellungenSearchSource::class,
         ];
     }
 }
