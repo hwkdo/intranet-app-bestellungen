@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen;
 
 use Hwkdo\IntranetAppBase\Data\NotificationTypeDefinition;
+use Hwkdo\IntranetAppBase\Data\SearchActionDefinition;
 use Hwkdo\IntranetAppBase\Interfaces\DashboardWidgetProviderInterface;
 use Hwkdo\IntranetAppBase\Interfaces\IntranetAppInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesDashboardWidgetsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesNotificationsInterface;
+use Hwkdo\IntranetAppBase\Interfaces\ProvidesSearchActionsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
 use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
 use Hwkdo\IntranetAppBestellungen\Dashboard\BestellungenDashboardWidgetProvider;
@@ -18,7 +20,7 @@ use Hwkdo\IntranetAppBestellungen\Tasks\FreigabeAusstehendTaskProvider;
 use Hwkdo\IntranetAppBestellungen\Tasks\InterneBestellungAusstehendTaskProvider;
 use Illuminate\Support\Collection;
 
-class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesTasksInterface
+class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesSearchActionsInterface, ProvidesTasksInterface
 {
     public static function app_name(): string
     {
@@ -92,6 +94,24 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboard
                 appName: self::app_name(),
                 description: 'Ihre Bestellung wurde freigegeben und kann bestellt werden.',
                 mandatory: true,
+            ),
+        ];
+    }
+
+    public static function searchActions(): array
+    {
+        return [
+            new SearchActionDefinition(
+                key: 'bestellungen.create',
+                title: 'Neue Bestellung',
+                keywords: ['neue bestellung', 'bestellung erstellen', 'bestellung', 'bestellen'],
+                routeName: 'apps.bestellungen.erstellen',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                icon: self::app_icon(),
+                permission: 'see-app-bestellungen',
+                subtitle: self::app_name(),
+                sort: 100,
             ),
         ];
     }
