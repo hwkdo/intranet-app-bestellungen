@@ -5,16 +5,20 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Services;
 
 use App\Models\User;
+use Hwkdo\D3RestLaravel\Client as D3Client;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
-use Hwkdo\IntranetAppBestellungen\Notifications\BestellungFreigegebenNotification;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Models\Aktion;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
+use Hwkdo\IntranetAppBestellungen\Notifications\BestellungAbgelehntNotification;
+use Hwkdo\IntranetAppBestellungen\Notifications\BestellungBestelltNotification;
+use Hwkdo\IntranetAppBestellungen\Notifications\BestellungFreigegebenNotification;
+use Hwkdo\IntranetAppBestellungen\Notifications\BestellungZurBestellungNotification;
+use Hwkdo\IntranetAppBestellungen\Notifications\BestellungZurFreigabeNotification;
 use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
 use Hwkdo\IntranetAppBestellungen\Services\D3\BestellscheinD3Service;
-use Hwkdo\D3RestLaravel\Client as D3Client;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -85,14 +89,17 @@ class BestellungWorkflow
             );
         }
 
-        return $this->transition($bestellung, $user, BestellungStatus::ZurFreigabe, AktionTyp::ZurFreigabeEingereicht);
+        $result = $this->transition($bestellung, $user, BestellungStatus::ZurFreigabe, AktionTyp::ZurFreigabeEingereicht);
+        $this->notifyFreigeberZurFreigabe($result);
+
+        return $result;
     }
 
     public function weiterleiten(Bestellung $bestellung, User $user, int $neuerFreigeberId, ?string $nachricht = null): Bestellung
     {
         $this->ensureStatus($bestellung, [BestellungStatus::ZurFreigabe, BestellungStatus::ZurZweitenFreigabe]);
 
-        return DB::transaction(function () use ($bestellung, $user, $neuerFreigeberId, $nachricht): Bestellung {
+        $result = DB::transaction(function () use ($bestellung, $user, $neuerFreigeberId, $nachricht): Bestellung {
             $bestellung->freigeber_id = $neuerFreigeberId;
             $bestellung->save();
 
@@ -102,13 +109,17 @@ class BestellungWorkflow
 
             return $bestellung->refresh();
         });
+
+        $this->notifyFreigeberZurFreigabe($result);
+
+        return $result;
     }
 
     public function freigeben(Bestellung $bestellung, User $user, ?string $nachricht = null): Bestellung
     {
         $this->ensureStatus($bestellung, [BestellungStatus::ZurFreigabe, BestellungStatus::ZurZweitenFreigabe]);
 
-        return DB::transaction(function () use ($bestellung, $user, $nachricht): Bestellung {
+        $result = DB::transaction(function () use ($bestellung, $user, $nachricht): Bestellung {
             if (
                 $bestellung->status === BestellungStatus::ZurFreigabe
                 && $this->wertgrenzen->zweiteFreigabeNoetig((float) $bestellung->gesamtbetrag)
@@ -130,24 +141,22 @@ class BestellungWorkflow
 
             return $this->transition($bestellung, $user, BestellungStatus::Freigegeben, AktionTyp::Freigegeben, $nachricht);
         });
-    }
 
-    private function notifyAnfordererFreigegeben(Bestellung $bestellung): void
-    {
-        $bestellung->loadMissing('user');
-
-        if ($bestellung->user === null) {
-            return;
+        if ($result->status === BestellungStatus::ZurZweitenFreigabe) {
+            $this->notifyFreigeberZurFreigabe($result);
         }
 
-        $bestellung->user->notify(new BestellungFreigegebenNotification($bestellung->fresh()));
+        return $result;
     }
 
     public function ablehnen(Bestellung $bestellung, User $user, string $nachricht): Bestellung
     {
         $this->ensureStatus($bestellung, [BestellungStatus::ZurFreigabe, BestellungStatus::ZurZweitenFreigabe]);
 
-        return $this->transition($bestellung, $user, BestellungStatus::Abgelehnt, AktionTyp::Abgelehnt, $nachricht);
+        $result = $this->transition($bestellung, $user, BestellungStatus::Abgelehnt, AktionTyp::Abgelehnt, $nachricht);
+        $this->notifyAnfordererAbgelehnt($result, $nachricht);
+
+        return $result;
     }
 
     public function bestellen(Bestellung $bestellung, User $user, ?string $nachricht = null): Bestellung
@@ -255,9 +264,77 @@ class BestellungWorkflow
 
         if ($neuerStatus === BestellungStatus::Freigegeben) {
             $this->notifyAnfordererFreigegeben($result);
+            $this->notifyInternerEmpfaengerZurBestellung($result);
+        }
+
+        if ($neuerStatus === BestellungStatus::Bestellt) {
+            $this->notifyAnfordererBestellt($result);
         }
 
         return $result;
+    }
+
+    private function notifyAnfordererFreigegeben(Bestellung $bestellung): void
+    {
+        $bestellung->loadMissing('user');
+
+        if ($bestellung->user === null) {
+            return;
+        }
+
+        $bestellung->user->notify(new BestellungFreigegebenNotification($bestellung->fresh()));
+    }
+
+    private function notifyAnfordererAbgelehnt(Bestellung $bestellung, string $grund): void
+    {
+        $bestellung->loadMissing('user');
+
+        if ($bestellung->user === null) {
+            return;
+        }
+
+        $bestellung->user->notify(new BestellungAbgelehntNotification($bestellung->fresh(), $grund));
+    }
+
+    private function notifyFreigeberZurFreigabe(Bestellung $bestellung): void
+    {
+        $bestellung->loadMissing('freigeber');
+
+        if ($bestellung->freigeber === null) {
+            return;
+        }
+
+        $bestellung->freigeber->notify(new BestellungZurFreigabeNotification($bestellung->fresh()));
+    }
+
+    private function notifyInternerEmpfaengerZurBestellung(Bestellung $bestellung): void
+    {
+        if (! $bestellung->istIntern()) {
+            return;
+        }
+
+        $bestellung->loadMissing('internerEmpfaenger');
+
+        if ($bestellung->internerEmpfaenger === null) {
+            return;
+        }
+
+        $bestellung->internerEmpfaenger->notify(new BestellungZurBestellungNotification($bestellung->fresh()));
+    }
+
+    private function notifyAnfordererBestellt(Bestellung $bestellung): void
+    {
+        if (! $bestellung->istIntern()) {
+            return;
+        }
+
+        $bestellung->loadMissing('user');
+
+        if ($bestellung->user === null) {
+            return;
+        }
+
+        $bestellung->user->notify(new BestellungBestelltNotification($bestellung->fresh()));
     }
 
     /**
