@@ -40,6 +40,8 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])->group(function (
     Route::get('apps/bestellungen/info', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Info::class)
         ->name('apps.bestellungen.info');
 
+    Route::get('apps/bestellungen/settings/notifications', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Settings\Notifications::class)
+        ->name('apps.bestellungen.settings.notifications');
 
     Route::get('apps/bestellungen/projekte', \Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Projekte\Index::class)
         ->name('apps.bestellungen.projekte.index');

@@ -26,7 +26,9 @@
         ];
     }
 
-    $defaultNavItems = array_merge($defaultNavItems, [        ['label' => 'App-Info', 'href' => route('apps.bestellungen.info'), 'icon' => 'information-circle', 'description' => 'Installierte Version und Release-Historie', 'buttonText' => 'App-Info anzeigen'],
+    $defaultNavItems = array_merge($defaultNavItems, [
+        ['label' => 'Benachrichtigungen', 'href' => route('apps.bestellungen.settings.notifications'), 'icon' => 'bell', 'description' => 'Benachrichtigungen dieser App konfigurieren', 'buttonText' => 'Benachrichtigungen öffnen'],
+        ['label' => 'App-Info', 'href' => route('apps.bestellungen.info'), 'icon' => 'information-circle', 'description' => 'Installierte Version und Release-Historie', 'buttonText' => 'App-Info anzeigen'],
         ['label' => 'Admin', 'href' => route('apps.bestellungen.admin.index'), 'icon' => 'shield-check', 'description' => 'Administrationsbereich verwalten', 'buttonText' => 'Admin öffnen', 'permission' => 'manage-app-bestellungen'],
     ]);
 
