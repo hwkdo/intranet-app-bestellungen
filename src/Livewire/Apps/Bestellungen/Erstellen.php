@@ -46,8 +46,6 @@ class Erstellen extends Component
 {
     use WithFileUploads;
 
-    private const HINWEIS_FREIGEBER_AUSWAHL = 'Es konnte kein eindeutiger Freigeber ermittel werden. Bitte Freigeber auswählen';
-
     public string $typ;
 
     public ?int $internerEmpfaengerUserId = null;
@@ -691,18 +689,6 @@ class Erstellen extends Component
             $bestellung->refresh();
             $bestellung->refreshGesamtbetrag();
 
-            $stufe = $service->stufeFuerBetrag((float) $bestellung->gesamtbetrag);
-            if ($stufe) {
-                $pool = $service->freigeber1FuerBestellung($bestellung);
-                if (
-                    $service->darfFreigeber1AutomatischZugewiesenWerden($bestellung)
-                    && $pool->count() === 1
-                ) {
-                    $bestellung->freigeber_id = $pool->first()?->getKey();
-                    $bestellung->save();
-                }
-            }
-
             $workflow->logAktion($bestellung, Auth::user(), AktionTyp::Erstellt);
 
             return $bestellung;
@@ -725,13 +711,31 @@ class Erstellen extends Component
             return;
         }
 
-        try {
-            $bestellung = $workflow->einreichen($bestellung, Auth::user());
-        } catch (WorkflowException $e) {
+        // Kein Freigeber nötig → wie bisher direkt freigeben.
+        // Sonst: gleicher Einreich-Pfad wie nach „Wiederholen“ (Detail inkl. D3-Abwesenheitshinweise).
+        if ($service->istFreigeber1NichtNoetig($bestellung)) {
+            try {
+                $bestellung = $workflow->einreichen($bestellung, Auth::user());
+            } catch (WorkflowException $e) {
+                Flux::toast(
+                    heading: 'Entwurf gespeichert',
+                    text: 'Bestellnummer '.$bestellung->nummer.' wurde angelegt, konnte aber nicht eingereicht werden: '.$e->getMessage(),
+                    variant: 'warning',
+                );
+
+                $this->redirectRoute('apps.bestellungen.detail', [
+                    'bestellung' => $bestellung,
+                ]);
+
+                return;
+            }
+
+            $bestellung->refresh();
+
             Flux::toast(
-                heading: 'Entwurf gespeichert',
-                text: 'Bestellnummer '.$bestellung->nummer.' wurde angelegt, konnte aber nicht eingereicht werden: '.$e->getMessage(),
-                variant: 'warning',
+                heading: 'Bestellung freigegeben',
+                text: 'Bestellnummer '.$bestellung->nummer.' wurde angelegt und automatisch freigegeben (kein Freigeber erforderlich). Sie können sie jetzt bestellen.',
+                variant: 'success',
             );
 
             $this->redirectRoute('apps.bestellungen.detail', [
@@ -741,24 +745,15 @@ class Erstellen extends Component
             return;
         }
 
-        $bestellung->refresh();
-
-        if ($bestellung->status === BestellungStatus::Freigegeben) {
-            Flux::toast(
-                heading: 'Bestellung freigegeben',
-                text: 'Bestellnummer '.$bestellung->nummer.' wurde angelegt und automatisch freigegeben (kein Freigeber erforderlich). Sie können sie jetzt bestellen.',
-                variant: 'success',
-            );
-        } else {
-            Flux::toast(
-                heading: 'Zur Freigabe eingereicht',
-                text: 'Bestellnummer '.$bestellung->nummer.' wurde zur Freigabe weitergeleitet.',
-                variant: 'success',
-            );
-        }
+        Flux::toast(
+            heading: 'Entwurf gespeichert',
+            text: 'Bestellnummer '.$bestellung->nummer.' wurde angelegt. Bitte Freigeber prüfen und zur Freigabe einreichen.',
+            variant: 'success',
+        );
 
         $this->redirectRoute('apps.bestellungen.detail', [
             'bestellung' => $bestellung,
+            'aktion' => 'einreichen',
         ]);
     }
 

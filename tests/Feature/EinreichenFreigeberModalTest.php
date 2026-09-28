@@ -88,6 +88,7 @@ it('zeigt Vertretung im Freigeber-Label und bündelt Abwesenheitshinweise', func
         ->call('einreichenModalOeffnen')
         ->assertSet('einreichFreigeberOptionen', [
             $anwesend->id => 'Sebastian Kopec',
+            $abwesend->id => 'Dominik Schmidt (abwesend)',
             $deputy->id => 'Tanja Kopowski (Vertretung für Dominik Schmidt)',
         ])
         ->assertSet('einreichFreigeberHinweise', [
@@ -95,4 +96,68 @@ it('zeigt Vertretung im Freigeber-Label und bündelt Abwesenheitshinweise', func
         ])
         ->assertSee('Abwesenheiten / Hinweise')
         ->assertSee('Dominik Schmidt ist in D3 abwesend. Vertretung: Tanja Kopowski.');
+});
+
+it('zeigt bei einzigem abwesenden Freigeber mit Vertretung das Modal statt still zu auto-einreichen', function (): void {
+    $besteller = User::factory()->create([
+        'vorname' => 'Jurij',
+        'nachname' => 'Vasilenko',
+        'username' => 'hwkdo-test-besteller-2',
+    ]);
+    $abwesend = User::factory()->create([
+        'vorname' => 'Alexander',
+        'nachname' => 'Dieckmann',
+        'username' => 'hwkdo-test-abwesend-2',
+    ]);
+    $deputy = User::factory()->create([
+        'vorname' => 'Friedrich',
+        'nachname' => 'Kiefer',
+        'username' => 'hwkdo-test-deputy-2',
+    ]);
+
+    $bestellung = Bestellung::factory()->create([
+        'user_id' => $besteller->id,
+        'status' => BestellungStatus::Entwurf,
+        'gesamtbetrag' => 800.00,
+        'freigeber_id' => null,
+    ]);
+
+    $wertgrenzen = Mockery::mock(WertgrenzenService::class);
+    $wertgrenzen->shouldReceive('istFreigeber1NichtNoetig')->andReturn(false);
+    $wertgrenzen->shouldReceive('freigeber1FuerBestellung')->andReturn(collect([$abwesend]));
+    app()->instance(WertgrenzenService::class, $wertgrenzen);
+
+    $absence = new class($deputy)
+    {
+        public bool $abwesend = true;
+
+        public function __construct(public User $vertreter) {}
+    };
+
+    $d3 = Mockery::mock(D3Client::class);
+    $d3->shouldReceive('getUserIdByUsername')
+        ->with($abwesend->username)
+        ->andReturn('d3-absent-2');
+    $d3->shouldReceive('getUserAbsence')
+        ->with('d3-absent-2')
+        ->andReturn($absence);
+    app()->instance(D3Client::class, $d3);
+
+    Livewire::actingAs($besteller)
+        ->test(Detail::class, ['bestellung' => $bestellung])
+        ->call('einreichenModalOeffnen')
+        ->assertSet('einreichenAnUserId', $deputy->id)
+        ->assertSet('einreichFreigeberOptionen', [
+            $abwesend->id => 'Alexander Dieckmann (abwesend)',
+            $deputy->id => 'Friedrich Kiefer (Vertretung für Alexander Dieckmann)',
+        ])
+        ->assertSet('einreichFreigeberHinweise', [
+            'Alexander Dieckmann ist in D3 abwesend. Vertretung: Friedrich Kiefer.',
+        ])
+        ->assertSee('Abwesenheiten / Hinweise')
+        ->assertSee('Friedrich Kiefer (Vertretung für Alexander Dieckmann)')
+        ->assertSee('Alexander Dieckmann (abwesend)');
+
+    expect($bestellung->fresh()->status)->toBe(BestellungStatus::Entwurf)
+        ->and($bestellung->fresh()->freigeber_id)->toBeNull();
 });

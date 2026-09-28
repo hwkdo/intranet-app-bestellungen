@@ -439,11 +439,25 @@ class Detail extends Component
             return;
         }
 
-        if (count($this->einreichFreigeberOptionen) === 1) {
+        // Eine Option ohne Abwesenheitshinweis: eindeutig und anwesend → direkt einreichen.
+        // Mit Hinweisen (Vertretung/Abwesenheit) immer Modal zeigen, damit der Nutzer informiert ist.
+        if (count($this->einreichFreigeberOptionen) === 1 && $this->einreichFreigeberHinweise === []) {
             $this->einreichenAnUserId = array_key_first($this->einreichFreigeberOptionen);
             $this->einreichen();
 
             return;
+        }
+
+        if (count($this->einreichFreigeberOptionen) === 1) {
+            $this->einreichenAnUserId = array_key_first($this->einreichFreigeberOptionen);
+        } elseif ($this->einreichFreigeberHinweise !== []) {
+            // Bei Abwesenheit standardmäßig die Vertretung vorwählen, Freigeber bleibt aber wählbar.
+            foreach ($this->einreichFreigeberOptionen as $userId => $label) {
+                if (str_contains((string) $label, 'Vertretung für')) {
+                    $this->einreichenAnUserId = (int) $userId;
+                    break;
+                }
+            }
         }
 
         Flux::modal('einreichen-modal')->show();
@@ -925,6 +939,12 @@ class Detail extends Component
 
                 continue;
             }
+
+            // Eigentlichen Freigeber weiter anbieten (als abwesend markiert), z. B. bei geplanter Rückkehr.
+            $optionen->put(
+                $kandidat->id,
+                sprintf('%s (abwesend)', $kandidat->name),
+            );
 
             if ($vertretung['deputy'] instanceof User) {
                 $deputy = $vertretung['deputy'];

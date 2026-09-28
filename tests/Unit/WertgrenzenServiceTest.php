@@ -201,3 +201,68 @@ it('gibt leere Collection zurück wenn keinFreigeber true', function (): void {
 
     expect($result)->toBeCollection()->toBeEmpty();
 });
+
+// ---------------------------------------------------------------------------
+// darfFreigeben
+// ---------------------------------------------------------------------------
+
+it('erlaubt dem zugewiesenen Freigeber die Freigabe auch außerhalb des Wertgrenzen-Pools', function (): void {
+    $besteller = User::factory()->create();
+    $poolFreigeber = User::factory()->create();
+    $vertretung = User::factory()->create();
+
+    $settings = stufeSettings([
+        'freigabe1Regeln' => [
+            [
+                'typ' => 'default',
+                'keinFreigeber' => false,
+                'quelleTyp' => 'single',
+                'quelle' => 'vorgesetzter',
+                'excludeAttribute' => [],
+            ],
+        ],
+    ]);
+
+    $service = new WertgrenzenService($settings);
+
+    /** @var \Hwkdo\IntranetAppBestellungen\Models\Bestellung $bestellung */
+    $bestellung = \Hwkdo\IntranetAppBestellungen\Models\Bestellung::factory()->create([
+        'user_id' => $besteller->id,
+        'freigeber_id' => $vertretung->id,
+        'status' => \Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus::ZurFreigabe,
+        'gesamtbetrag' => 800,
+    ]);
+
+    expect($service->darfFreigeben($vertretung, $bestellung))->toBeTrue()
+        ->and($service->darfFreigeben($poolFreigeber, $bestellung))->toBeFalse()
+        ->and($service->darfFreigeben($besteller, $bestellung))->toBeFalse();
+});
+
+it('nutzt ohne freigeber_id den Wertgrenzen-Pool', function (): void {
+    $besteller = User::factory()->create();
+    $anderer = User::factory()->create();
+
+    $settings = stufeSettings([
+        'freigabe1Regeln' => [
+            [
+                'typ' => 'default',
+                'keinFreigeber' => true,
+                'quelleTyp' => 'single',
+                'quelle' => 'vorgesetzter',
+                'excludeAttribute' => [],
+            ],
+        ],
+    ]);
+
+    $service = new WertgrenzenService($settings);
+
+    /** @var \Hwkdo\IntranetAppBestellungen\Models\Bestellung $bestellung */
+    $bestellung = \Hwkdo\IntranetAppBestellungen\Models\Bestellung::factory()->create([
+        'user_id' => $besteller->id,
+        'freigeber_id' => null,
+        'status' => \Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus::ZurFreigabe,
+        'gesamtbetrag' => 100,
+    ]);
+
+    expect($service->darfFreigeben($anderer, $bestellung))->toBeFalse();
+});

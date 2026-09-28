@@ -251,10 +251,20 @@ class WertgrenzenService
 
     /**
      * Prüft, ob ein User die Bestellung auf ihrer aktuellen Stufe freigeben darf.
-     * Status-bewusst: ZurFreigabe → Freigeber-1-Pool, ZurZweitenFreigabe → Freigeber-2-Pool.
+     *
+     * Ist ein Freigeber zugewiesen (`freigeber_id`), ist ausschließlich dieser berechtigt
+     * (inkl. D3-Vertretung). Ohne Zuweisung gilt der Wertgrenzen-Pool der Stufe.
      */
     public function darfFreigeben(User $user, Bestellung $bestellung): bool
     {
+        if (! $bestellung->status?->isFreigabePending()) {
+            return false;
+        }
+
+        if ($bestellung->freigeber_id !== null) {
+            return (int) $bestellung->freigeber_id === (int) $user->getKey();
+        }
+
         return match ($bestellung->status) {
             BestellungStatus::ZurFreigabe => $this->freigeber1FuerBestellung($bestellung)
                 ->contains(fn (User $u): bool => $u->getKey() === $user->getKey()),

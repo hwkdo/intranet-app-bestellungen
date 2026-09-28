@@ -7,6 +7,7 @@ namespace Hwkdo\IntranetAppBestellungen\Notifications;
 use Hwkdo\IntranetAppBase\Notifications\IntranetNotification;
 use Hwkdo\IntranetAppBestellungen\IntranetAppBestellungen;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
+use Hwkdo\IntranetAppBestellungen\Support\BestellungFreigabeAdaptiveCard;
 use Illuminate\Notifications\Messages\MailMessage;
 use NotificationChannels\WebPush\WebPushMessage;
 
@@ -63,6 +64,8 @@ class BestellungZurFreigabeNotification extends IntranetNotification
 
     public function toTeams(object $notifiable): array
     {
+        $this->bestellung->loadMissing(['user', 'positionen']);
+
         return [
             'preview' => 'Bestellung '.$this->bestellung->nummer.' zur Freigabe zugewiesen.',
             'topic' => 'Bestellungen',
@@ -70,6 +73,9 @@ class BestellungZurFreigabeNotification extends IntranetNotification
                 'bestellung' => $this->bestellung,
                 'aktion' => 'freigeben',
             ]),
+            'card' => BestellungFreigabeAdaptiveCard::forBestellung(
+                $this->bestellung,
+            ),
         ];
     }
 }

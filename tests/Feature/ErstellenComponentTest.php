@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\User;
 use App\Services\IntranetLegacyService;
 use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
+use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Erstellen;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
@@ -18,13 +19,27 @@ beforeEach(function (): void {
     $legacyMock->shouldReceive('getMaxSequenceFromLegacy')->andReturn(0);
     app()->instance(IntranetLegacyService::class, $legacyMock);
 
+    Role::findOrCreate('Benutzer', 'web');
     Role::findOrCreate('App-Bestellungen-Admin', 'web');
 
     IntranetAppBestellungenSettings::create([
         'version' => 1,
         'settings' => AppSettings::from([
             'freigabeStufen' => [
-                ['bezeichnung' => 'Standard', 'bisBetrag' => null, 'freigeberRollen' => ['App-Bestellungen-Admin']],
+                [
+                    'bezeichnung' => 'Standard',
+                    'bisBetrag' => null,
+                    'berechtigteRollen' => ['Benutzer'],
+                    'freigabe1Regeln' => [
+                        [
+                            'typ' => 'default',
+                            'keinFreigeber' => true,
+                            'quelleTyp' => 'single',
+                            'quelle' => 'vorgesetzter',
+                            'excludeAttribute' => [],
+                        ],
+                    ],
+                ],
             ],
             'angebotsRegeln' => [
                 ['abBetrag' => 0, 'mindestAngebote' => 0, 'begruendungErlaubt' => true],
@@ -37,6 +52,7 @@ it('legt eine Bestellung mit Position an und reicht sie ein', function (): void 
     Storage::fake('public');
 
     $user = User::factory()->create();
+    $user->assignRole('Benutzer');
     $positionPdf = UploadedFile::fake()->create('position.pdf', 64, 'application/pdf');
 
     Livewire::actingAs($user)
@@ -78,7 +94,20 @@ it('leitet unterhalb der Angebotsgrenze nicht zum Angebote-Tab weiter', function
         'version' => 1,
         'settings' => AppSettings::from([
             'freigabeStufen' => [
-                ['bezeichnung' => 'Standard', 'bisBetrag' => null, 'freigeberRollen' => ['App-Bestellungen-Admin']],
+                [
+                    'bezeichnung' => 'Standard',
+                    'bisBetrag' => null,
+                    'berechtigteRollen' => ['Benutzer'],
+                    'freigabe1Regeln' => [
+                        [
+                            'typ' => 'default',
+                            'keinFreigeber' => true,
+                            'quelleTyp' => 'single',
+                            'quelle' => 'vorgesetzter',
+                            'excludeAttribute' => [],
+                        ],
+                    ],
+                ],
             ],
             'angebotsRegeln' => [
                 ['abBetrag' => 0, 'mindestAngebote' => 0, 'begruendungErlaubt' => true],
@@ -88,6 +117,7 @@ it('leitet unterhalb der Angebotsgrenze nicht zum Angebote-Tab weiter', function
     ]);
 
     $user = User::factory()->create();
+    $user->assignRole('Benutzer');
 
     $component = Livewire::actingAs($user)
         ->test(Erstellen::class, ['typ' => 'extern'])
@@ -123,7 +153,20 @@ it('leitet oberhalb der Angebotsgrenze zum Angebote-Tab weiter', function (): vo
         'version' => 1,
         'settings' => AppSettings::from([
             'freigabeStufen' => [
-                ['bezeichnung' => 'Standard', 'bisBetrag' => null, 'freigeberRollen' => ['App-Bestellungen-Admin']],
+                [
+                    'bezeichnung' => 'Standard',
+                    'bisBetrag' => null,
+                    'berechtigteRollen' => ['Benutzer'],
+                    'freigabe1Regeln' => [
+                        [
+                            'typ' => 'default',
+                            'keinFreigeber' => true,
+                            'quelleTyp' => 'single',
+                            'quelle' => 'vorgesetzter',
+                            'excludeAttribute' => [],
+                        ],
+                    ],
+                ],
             ],
             'angebotsRegeln' => [
                 ['abBetrag' => 0, 'mindestAngebote' => 0, 'begruendungErlaubt' => true],
@@ -133,6 +176,7 @@ it('leitet oberhalb der Angebotsgrenze zum Angebote-Tab weiter', function (): vo
     ]);
 
     $user = User::factory()->create();
+    $user->assignRole('Benutzer');
 
     $component = Livewire::actingAs($user)
         ->test(Erstellen::class, ['typ' => 'extern'])
@@ -162,8 +206,69 @@ it('leitet oberhalb der Angebotsgrenze zum Angebote-Tab weiter', function (): vo
         ->toContain('tab=angebote');
 });
 
+it('leitet bei erforderlichem Freigeber zur Detail-Einreichung weiter', function (): void {
+    IntranetAppBestellungenSettings::query()->delete();
+
+    IntranetAppBestellungenSettings::create([
+        'version' => 1,
+        'settings' => AppSettings::from([
+            'freigabeStufen' => [
+                [
+                    'bezeichnung' => 'Mit Freigeber',
+                    'bisBetrag' => null,
+                    'berechtigteRollen' => ['Benutzer'],
+                    'freigabe1Regeln' => [
+                        [
+                            'typ' => 'default',
+                            'keinFreigeber' => false,
+                            'quelleTyp' => 'single',
+                            'quelle' => 'vorgesetzter',
+                            'excludeAttribute' => [],
+                        ],
+                    ],
+                ],
+            ],
+            'angebotsRegeln' => [
+                ['abBetrag' => 0, 'mindestAngebote' => 0, 'begruendungErlaubt' => true],
+            ],
+        ])->toArray(),
+    ]);
+
+    $user = User::factory()->create();
+    $user->assignRole('Benutzer');
+
+    $component = Livewire::actingAs($user)
+        ->test(Erstellen::class, ['typ' => 'extern'])
+        ->set('lieferantennummer', '12345')
+        ->set('lieferantenname', 'Test GmbH')
+        ->set('kostenstelle', '4711')
+        ->set('haushaltsjahr', 2026)
+        ->set('betreff', 'Freigeber nötig')
+        ->set('begruendung', 'Begründung für eine Bestellung mit erforderlichem Freigeber.')
+        ->set('positionen', [[
+            'nr' => 1,
+            'art_id' => null,
+            'art_nr' => null,
+            'oberbegriff' => null,
+            'bezeichnung' => 'Material',
+            'menge' => 1,
+            'einheit' => 'Stk',
+            'preis' => 800.00,
+        ]])
+        ->call('speichern')
+        ->assertRedirect();
+
+    $bestellung = Bestellung::query()->where('betreff', 'Freigeber nötig')->first();
+
+    expect($bestellung)->not->toBeNull()
+        ->and($bestellung->status)->toBe(BestellungStatus::Entwurf)
+        ->and($bestellung->freigeber_id)->toBeNull()
+        ->and($component->effects['redirect'] ?? '')->toContain('aktion=einreichen');
+});
+
 it('verlangt eine Begründung beim Erstellen einer Bestellung', function (): void {
     $user = User::factory()->create();
+    $user->assignRole('Benutzer');
 
     Livewire::actingAs($user)
         ->test(Erstellen::class, ['typ' => 'extern'])
@@ -187,6 +292,7 @@ it('verlangt eine Begründung beim Erstellen einer Bestellung', function (): voi
 
 it('synchronisiert die obere Kostenstelle live mit der ersten Kontierungszeile', function (): void {
     $user = User::factory()->create();
+    $user->assignRole('Benutzer');
 
     Livewire::actingAs($user)
         ->test(Erstellen::class, ['typ' => 'extern'])
@@ -200,6 +306,7 @@ it('übernimmt beim Speichern die Kostenstelle aus der ersten Kontierungszeile',
     Storage::fake('public');
 
     $user = User::factory()->create();
+    $user->assignRole('Benutzer');
 
     Livewire::actingAs($user)
         ->test(Erstellen::class, ['typ' => 'extern'])

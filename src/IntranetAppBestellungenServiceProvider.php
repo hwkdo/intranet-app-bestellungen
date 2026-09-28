@@ -53,6 +53,22 @@ class IntranetAppBestellungenServiceProvider extends PackageServiceProvider
         Projekt::observe(ProjektSearchObserver::class);
 
         $this->configureTypesenseIndexSettings();
+        $this->registerTeamsAdaptiveCardActionHandlers();
+    }
+
+    protected function registerTeamsAdaptiveCardActionHandlers(): void
+    {
+        $handlers = config('intranet-app-teams-bot.adaptive_card_action_handlers', []);
+
+        if (! is_array($handlers)) {
+            $handlers = [];
+        }
+
+        $handlers[] = \Hwkdo\IntranetAppBestellungen\Services\BestellungFreigabeCardActionHandler::class;
+
+        config([
+            'intranet-app-teams-bot.adaptive_card_action_handlers' => array_values(array_unique($handlers)),
+        ]);
     }
 
     protected function configureTypesenseIndexSettings(): void
