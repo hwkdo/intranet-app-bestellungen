@@ -66,6 +66,11 @@ class BestellungZurFreigabeNotification extends IntranetNotification
     {
         $this->bestellung->loadMissing(['user', 'positionen']);
 
+        $azureUserId = $notifiable->socialite_id ?? null;
+        $azureUserId = is_string($azureUserId) && $azureUserId !== ''
+            ? strtolower($azureUserId)
+            : null;
+
         return [
             'preview' => 'Bestellung '.$this->bestellung->nummer.' zur Freigabe zugewiesen.',
             'topic' => 'Bestellungen',
@@ -75,6 +80,7 @@ class BestellungZurFreigabeNotification extends IntranetNotification
             ]),
             'card' => BestellungFreigabeAdaptiveCard::forBestellung(
                 $this->bestellung,
+                $azureUserId,
             ),
         ];
     }

@@ -13,12 +13,20 @@ class BestellungFreigabeAdaptiveCard
 
     public const VERB_REJECT = 'bestellungen.reject';
 
+    public const VERB_REFRESH = 'bestellungen.refresh';
+
     private const MAX_POSITIONS = 10;
 
     /**
+     * Freigabe-Card mit Refresh.
+     *
+     * refresh.userIds muss gesetzt sein (sonst ignoriert Teams refresh oft ganz).
+     * - echte MRI (`29:…`): Auto-Refresh
+     * - Azure-GUID / leer: manueller Refresh-Menüpunkt (kein zuverlässiges Auto)
+     *
      * @return array<string, mixed>
      */
-    public static function forBestellung(Bestellung $bestellung): array
+    public static function forBestellung(Bestellung $bestellung, ?string $recipientAzureUserIdOrMri = null): array
     {
         $bestellung->loadMissing(['user', 'positionen']);
 
@@ -119,7 +127,7 @@ class BestellungFreigabeAdaptiveCard
             'placeholder' => 'Grund angeben…',
         ];
 
-        return [
+        $card = [
             'type' => 'AdaptiveCard',
             '$schema' => 'http://adaptivecards.io/schemas/adaptive-card.json',
             'version' => '1.5',
@@ -150,6 +158,48 @@ class BestellungFreigabeAdaptiveCard
                 ],
             ],
         ];
+
+        $card['refresh'] = [
+            'action' => [
+                'type' => 'Action.Execute',
+                'title' => 'Aktualisieren',
+                'verb' => self::VERB_REFRESH,
+                'data' => [
+                    'bestellung_id' => $bestellung->id,
+                ],
+            ],
+            'userIds' => self::refreshUserIds($recipientAzureUserIdOrMri),
+        ];
+
+        return $card;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function refreshUserIds(?string $recipientAzureUserIdOrMri): array
+    {
+        if (! is_string($recipientAzureUserIdOrMri) || trim($recipientAzureUserIdOrMri) === '') {
+            // Leeres Array = laut MS-Docs manueller Refresh-Menüpunkt, kein Auto.
+            return [];
+        }
+
+        $value = trim($recipientAzureUserIdOrMri);
+
+        // Echte Teams-MRI → Auto-Refresh für diesen User.
+        if (str_starts_with($value, '29:')) {
+            return [$value];
+        }
+
+        // AAD-Object-ID (socialite_id): kein gültiges MRI-Match → Teams zeigt
+        // den manuellen Refresh (wie zuvor bestätigt). NICHT zu 29:1{guid}
+        // umschreiben — das kann fälschlich als Auto-Ziel gelten und den
+        // Menüpunkt entfernen, ohne dass Auto zuverlässig feuert.
+        if (preg_match('/^[0-9a-f-]{36}$/i', $value) === 1) {
+            return [strtolower($value)];
+        }
+
+        return [];
     }
 
     /**

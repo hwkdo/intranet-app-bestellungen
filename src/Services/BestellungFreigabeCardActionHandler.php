@@ -25,6 +25,7 @@ class BestellungFreigabeCardActionHandler implements TeamsAdaptiveCardActionHand
         return in_array($action->verb, [
             BestellungFreigabeAdaptiveCard::VERB_APPROVE,
             BestellungFreigabeAdaptiveCard::VERB_REJECT,
+            BestellungFreigabeAdaptiveCard::VERB_REFRESH,
         ], true);
     }
 
@@ -44,6 +45,10 @@ class BestellungFreigabeCardActionHandler implements TeamsAdaptiveCardActionHand
 
         if ($bestellung === null) {
             return TeamsAdaptiveCardInvokeResponse::message('Bestellung nicht gefunden.');
+        }
+
+        if ($action->verb === BestellungFreigabeAdaptiveCard::VERB_REFRESH) {
+            return $this->refresh($bestellung, $action);
         }
 
         if (! in_array($bestellung->status, [
@@ -76,6 +81,40 @@ class BestellungFreigabeCardActionHandler implements TeamsAdaptiveCardActionHand
         return $this->freigeben($user, $bestellung);
     }
 
+    private function refresh(Bestellung $bestellung, TeamsAdaptiveCardAction $action): array
+    {
+        if (in_array($bestellung->status, [
+            BestellungStatus::ZurFreigabe,
+            BestellungStatus::ZurZweitenFreigabe,
+        ], true)) {
+            return TeamsAdaptiveCardInvokeResponse::card(
+                BestellungFreigabeAdaptiveCard::forBestellung(
+                    $bestellung,
+                    $this->refreshRecipientIdFromAction($action),
+                ),
+            );
+        }
+
+        return TeamsAdaptiveCardInvokeResponse::card(
+            BestellungFreigabeAdaptiveCard::statusCard(
+                $bestellung,
+                'Bereits erledigt',
+                'Diese Bestellung ist nicht mehr zur Freigabe offen.',
+            ),
+        );
+    }
+
+    private function refreshRecipientIdFromAction(TeamsAdaptiveCardAction $action): ?string
+    {
+        $fromId = $action->activity['from']['id'] ?? null;
+
+        if (is_string($fromId) && $fromId !== '') {
+            return $fromId;
+        }
+
+        return $action->azureUserId !== '' ? $action->azureUserId : null;
+    }
+
     private function freigeben(User $user, Bestellung $bestellung): array
     {
         $result = $this->workflow->freigeben($bestellung, $user);
@@ -98,7 +137,10 @@ class BestellungFreigabeCardActionHandler implements TeamsAdaptiveCardActionHand
         $grund = trim((string) ($action->data['ablehnenGrund'] ?? ''));
 
         if (mb_strlen($grund) < 3) {
-            $card = BestellungFreigabeAdaptiveCard::forBestellung($bestellung);
+            $card = BestellungFreigabeAdaptiveCard::forBestellung(
+                $bestellung,
+                $this->refreshRecipientIdFromAction($action),
+            );
             array_unshift($card['body'], [
                 'type' => 'TextBlock',
                 'text' => 'Bitte einen Ablehnungsgrund mit mindestens 3 Zeichen angeben.',
