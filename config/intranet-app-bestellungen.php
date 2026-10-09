@@ -8,10 +8,6 @@ return [
         'allowed_mimes' => ['application/pdf'],
         'allowed_extensions' => ['pdf'],
         'extract_queue' => env('INTRANET_APP_BESTELLUNGEN_API_EXTRACT_QUEUE'),
-        'vision_max_pages' => (int) env('INTRANET_APP_BESTELLUNGEN_API_VISION_MAX_PAGES', 2),
-        'vision_dpi' => (int) env('INTRANET_APP_BESTELLUNGEN_API_VISION_DPI', 180),
-        'vision_timeout_seconds' => (int) env('INTRANET_APP_BESTELLUNGEN_API_VISION_TIMEOUT_SECONDS', 120),
-        'vision_connect_timeout_seconds' => (int) env('INTRANET_APP_BESTELLUNGEN_API_VISION_CONNECT_TIMEOUT_SECONDS', 15),
     ],
 
     'roles' => [

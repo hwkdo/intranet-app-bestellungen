@@ -35,8 +35,7 @@ class ExtractAngebotMetadataJob implements ShouldQueue
     public function handle(
         AngebotPdfMetadataExtractionService $extractionService,
         BestellungWorkflow $workflow,
-    ): void
-    {
+    ): void {
         $angebot = Angebot::query()->find($this->angebotId);
         if (! $angebot) {
             return;
@@ -63,11 +62,9 @@ class ExtractAngebotMetadataJob implements ShouldQueue
             'extraction_error' => null,
         ])->save();
 
-        $method = (string) ($result['method'] ?? 'unbekannt');
         $provider = (string) ($result['provider'] ?? '');
-        $humanMethod = $method === 'pdf-to-text'
-            ? 'pdf-to-text'
-            : ($provider !== '' ? 'KI ('.$provider.')' : 'KI');
+        $textHerkunft = ($result['source'] ?? '') === 'document_parse' ? 'Document-Parsing' : 'PDF-Text';
+        $humanMethod = ($provider !== '' ? 'KI ('.$provider.')' : 'KI').', Text aus '.$textHerkunft;
 
         $workflow->logAktion(
             $angebot->bestellung,
@@ -76,7 +73,7 @@ class ExtractAngebotMetadataJob implements ShouldQueue
             'Metadaten für Angebot wurden automatisch extrahiert via '.$humanMethod.'.',
             payload: [
                 'angebot_id' => $angebot->getKey(),
-                'method' => $method,
+                'method' => $result['method'] ?? null,
                 'provider' => $provider !== '' ? $provider : null,
                 'source' => $result['source'] ?? null,
             ],

@@ -9,6 +9,7 @@
                 <flux:tab name="stammdaten" icon="circle-stack">Stammdaten</flux:tab>
                 <flux:tab name="monitoring" icon="eye">Monitoring</flux:tab>
                 <flux:tab name="settings" icon="cog-6-tooth">Allgemeine Einstellungen</flux:tab>
+                <flux:tab name="ki" icon="sparkles">KI</flux:tab>
             </flux:tabs>
 
             <flux:tab.panel name="wertgrenzen">
@@ -40,7 +41,27 @@
                     'appIdentifier' => 'bestellungen',
                     'settingsModelClass' => \Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings::class,
                     'appSettingsClass' => \Hwkdo\IntranetAppBestellungen\Data\AppSettings::class,
+                    'excludedKeys' => [
+                        'aiTextProviderOverride',
+                        'aiTextModelOverride',
+                        'aiImageProviderOverride',
+                        'aiImageModelOverride',
+                        'documentParseEngineOverride',
+                        'documentParseTierOverride',
+                    ],
                 ])
+            </flux:tab.panel>
+
+            <flux:tab.panel name="ki">
+                <div class="min-h-[400px] space-y-4">
+                    @livewire('intranet-app-base::document-parse-settings', [
+                        'appIdentifier' => 'bestellungen',
+                        'settingsModelClass' => \Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings::class,
+                        'appSettingsClass' => \Hwkdo\IntranetAppBestellungen\Data\AppSettings::class,
+                    ])
+
+                    <livewire:intranet-app-bestellungen::apps.bestellungen.admin.ki-einstellungen />
+                </div>
             </flux:tab.panel>
         </flux:tab.group>
     </x-intranet-app-bestellungen::bestellungen-layout>

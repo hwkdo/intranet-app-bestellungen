@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppBestellungen\Data;
 
+use Hwkdo\IntranetAppBase\Contracts\HasAiSettings;
+use Hwkdo\IntranetAppBase\Contracts\HasDocumentParseSettings;
 use Hwkdo\IntranetAppBase\Data\Attributes\Description;
 use Hwkdo\IntranetAppBase\Data\BaseAppSettings;
+use Hwkdo\IntranetAppBase\Enums\AiProvider;
+use Hwkdo\IntranetAppBase\Enums\DocumentParseEngine;
+use Hwkdo\IntranetAppBase\Traits\HasDocumentParseSettingsFields;
 
-class AppSettings extends BaseAppSettings
+class AppSettings extends BaseAppSettings implements HasAiSettings, HasDocumentParseSettings
 {
+    use HasDocumentParseSettingsFields;
+
     /**
      * @param  array<int, array<string, mixed>>  $freigabeStufen
      * @param  array<int, array<string, mixed>>  $angebotsRegeln
@@ -171,7 +178,56 @@ class AppSettings extends BaseAppSettings
 
         #[Description('Spatie-Rolle für wählbare interne Empfänger (Mitglieder = interne Fachabteilung, z. B. IT)')]
         public string $interneBestellerGruppe = 'App-Bestellungen-InterneBesteller',
+
+        #[Description('KI-Text-Provider überschreiben (leer = Intranet-Base-Default)')]
+        public ?AiProvider $aiTextProviderOverride = null,
+
+        #[Description('KI-Text-Modell überschreiben (leer = Base- bzw. Provider-Default)')]
+        public ?string $aiTextModelOverride = null,
+
+        #[Description('KI-Bild-Provider überschreiben (leer = Intranet-Base-Default)')]
+        public ?AiProvider $aiImageProviderOverride = null,
+
+        #[Description('KI-Bild-Modell überschreiben (leer = Base- bzw. Provider-Default)')]
+        public ?string $aiImageModelOverride = null,
+
+        #[Description('Document-Parsing-Motor überschreiben (leer = Intranet-Base-Default)')]
+        public ?DocumentParseEngine $documentParseEngineOverride = null,
+
+        #[Description('LlamaParse-Tier überschreiben (leer = Intranet-Base-Default)')]
+        public ?string $documentParseTierOverride = null,
     ) {}
+
+    public function textProviderOverride(): ?AiProvider
+    {
+        return $this->aiTextProviderOverride;
+    }
+
+    public function textModelOverride(): ?string
+    {
+        return $this->blankToNull($this->aiTextModelOverride);
+    }
+
+    public function imageProviderOverride(): ?AiProvider
+    {
+        return $this->aiImageProviderOverride;
+    }
+
+    public function imageModelOverride(): ?string
+    {
+        return $this->blankToNull($this->aiImageModelOverride);
+    }
+
+    private function blankToNull(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed === '' ? null : $trimmed;
+    }
 
     /**
      * @return array<int, FreigabeStufe>
