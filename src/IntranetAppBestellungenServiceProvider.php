@@ -13,8 +13,10 @@ use Hwkdo\IntranetAppBestellungen\Models\Projekt;
 use Hwkdo\IntranetAppBestellungen\Observers\AktionSearchObserver;
 use Hwkdo\IntranetAppBestellungen\Observers\PositionSearchObserver;
 use Hwkdo\IntranetAppBestellungen\Observers\ProjektSearchObserver;
+use Hwkdo\IntranetAppBestellungen\Services\BestellungFreigabeCardActionHandler;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
+use Livewire\Volt\Volt;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -45,6 +47,9 @@ class IntranetAppBestellungenServiceProvider extends PackageServiceProvider
     public function boot(): void
     {
         parent::boot();
+        $this->app->booted(function (): void {
+            Volt::mount(__DIR__.'/../resources/views/livewire');
+        });
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         $this->loadRoutesFrom(__DIR__.'/../routes/api.php');
 
@@ -64,7 +69,7 @@ class IntranetAppBestellungenServiceProvider extends PackageServiceProvider
             $handlers = [];
         }
 
-        $handlers[] = \Hwkdo\IntranetAppBestellungen\Services\BestellungFreigabeCardActionHandler::class;
+        $handlers[] = BestellungFreigabeCardActionHandler::class;
 
         config([
             'intranet-app-teams-bot.adaptive_card_action_handlers' => array_values(array_unique($handlers)),

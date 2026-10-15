@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Livewire\Volt\Volt;
+
 use Hwkdo\IntranetAppBestellungen\Http\Controllers\AngebotPdfController;
 use Hwkdo\IntranetAppBestellungen\Http\Controllers\PdfController;
 use Illuminate\Support\Facades\Route;
@@ -78,3 +80,8 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])
         Route::get('apps/bestellungen/{bestellung}/angebote/{angebot}/pdf/inline', [AngebotPdfController::class, 'inline'])
             ->name('apps.bestellungen.angebot.pdf.inline');
     });
+
+Route::middleware(['web', 'auth', 'can:manage-app-bestellungen'])->group(function (): void {
+    Volt::route('apps/bestellungen/admin/background-activities', 'apps.bestellungen.admin.background-activities')
+        ->name('apps.bestellungen.admin.background-activities');
+});

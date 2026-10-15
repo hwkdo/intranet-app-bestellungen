@@ -29,6 +29,7 @@
     $defaultNavItems = array_merge($defaultNavItems, [
         ['label' => 'Benachrichtigungen', 'href' => route('apps.bestellungen.settings.notifications'), 'icon' => 'bell', 'description' => 'Benachrichtigungen dieser App konfigurieren', 'buttonText' => 'Benachrichtigungen öffnen'],
         ['label' => 'App-Info', 'href' => route('apps.bestellungen.info'), 'icon' => 'information-circle', 'description' => 'Installierte Version und Release-Historie', 'buttonText' => 'App-Info anzeigen'],
+        ['label' => 'Hintergrund', 'href' => route('apps.bestellungen.admin.background-activities'), 'icon' => 'clock', 'description' => 'Geplante Tasks, Jobs und Versand', 'buttonText' => 'Hintergrund öffnen', 'permission' => 'manage-app-bestellungen'],
         ['label' => 'Admin', 'href' => route('apps.bestellungen.admin.index'), 'icon' => 'shield-check', 'description' => 'Administrationsbereich verwalten', 'buttonText' => 'Admin öffnen', 'permission' => 'manage-app-bestellungen'],
     ]);
 

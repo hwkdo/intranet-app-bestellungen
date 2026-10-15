@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppBestellungen;
 
+use Hwkdo\IntranetAppBase\Interfaces\ProvidesBackgroundActivitiesInterface;
+use Hwkdo\IntranetAppBestellungen\Background\BestellungenBackgroundActivities;
 use Hwkdo\IntranetAppBase\Data\NotificationTypeDefinition;
 use Hwkdo\IntranetAppBase\Data\SearchActionDefinition;
 use Hwkdo\IntranetAppBase\Interfaces\DashboardWidgetProviderInterface;
@@ -23,7 +25,7 @@ use Hwkdo\IntranetAppBestellungen\Tasks\FreigabeAusstehendTaskProvider;
 use Hwkdo\IntranetAppBestellungen\Tasks\InterneBestellungAusstehendTaskProvider;
 use Illuminate\Support\Collection;
 
-class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesSearchActionsInterface, ProvidesSearchInterface, ProvidesTasksInterface
+class IntranetAppBestellungen implements IntranetAppInterface, ProvidesBackgroundActivitiesInterface, ProvidesDashboardWidgetsInterface, ProvidesNotificationsInterface, ProvidesSearchActionsInterface, ProvidesSearchInterface, ProvidesTasksInterface
 {
     public static function app_name(): string
     {
@@ -178,4 +180,11 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesDashboard
             BestellungenSearchSource::class,
         ];
     }
+
+    public static function backgroundActivities(): array
+    {
+        return BestellungenBackgroundActivities::definitions();
+    }
+
+
 }
