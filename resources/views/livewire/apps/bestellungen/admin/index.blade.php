@@ -10,6 +10,7 @@
                 <flux:tab name="monitoring" icon="eye">Monitoring</flux:tab>
                 <flux:tab name="settings" icon="cog-6-tooth">Allgemeine Einstellungen</flux:tab>
                 <flux:tab name="ki" icon="sparkles">KI</flux:tab>
+                <flux:tab name="hintergrund" icon="clock">Hintergrund</flux:tab>
             </flux:tabs>
 
             <flux:tab.panel name="wertgrenzen">
@@ -63,6 +64,13 @@
                     <livewire:intranet-app-bestellungen::apps.bestellungen.admin.ki-einstellungen />
                 </div>
             </flux:tab.panel>
+        <flux:tab.panel name="hintergrund">
+            @if ($activeTab === 'hintergrund')
+                <div class="min-h-[400px]">
+                    @livewire('intranet-app-base::background-activities', ['appIdentifier' => 'bestellungen'], key('bestellungen-admin-hintergrund'))
+                </div>
+            @endif
+        </flux:tab.panel>
         </flux:tab.group>
     </x-intranet-app-bestellungen::bestellungen-layout>
 </div>
