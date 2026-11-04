@@ -8,7 +8,8 @@
         <flux:callout.heading>Globale KI-Standards</flux:callout.heading>
         <flux:callout.text>
             Text: <strong>{{ $this->baseAiTextSummary }}</strong><br>
-            Bilder: <strong>{{ $this->baseAiImageSummary }}</strong>
+            Bilder: <strong>{{ $this->baseAiImageSummary }}</strong><br>
+            Klassifikation: <strong>{{ $this->baseAiClassificationSummary }}</strong>
         </flux:callout.text>
     </flux:callout>
 
@@ -17,12 +18,17 @@
         ai-text-model-override="aiTextModelOverride"
         ai-image-provider-override="aiImageProviderOverride"
         ai-image-model-override="aiImageModelOverride"
+        ai-image-edit-model-override="aiImageEditModelOverride"
+        :image-provider="$aiImageProviderOverride"
+        ai-classification-provider-override="aiClassificationProviderOverride"
+        ai-classification-model-override="aiClassificationModelOverride"
     />
 
     <flux:text class="mt-4 text-sm text-zinc-500">
         Aktuell wirksam für die Angebotsextraktion:
         <strong>{{ $this->effectiveAiTextSummary }}</strong>.
         Bilder: <strong>{{ $this->effectiveAiImageSummary }}</strong>.
+        Klassifikation: <strong>{{ $this->effectiveAiClassificationSummary }}</strong>.
     </flux:text>
 
     <div class="mt-6 flex justify-end">

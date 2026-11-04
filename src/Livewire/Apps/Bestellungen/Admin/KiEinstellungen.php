@@ -26,6 +26,12 @@ class KiEinstellungen extends Component
 
     public string $aiImageModelOverride = '';
 
+    public string $aiImageEditModelOverride = '';
+
+    public string $aiClassificationProviderOverride = '';
+
+    public string $aiClassificationModelOverride = '';
+
     public function mount(): void
     {
         $settings = IntranetAppBestellungenSettings::resolvedAppSettings();
@@ -34,6 +40,15 @@ class KiEinstellungen extends Component
         $this->aiTextModelOverride = $settings->textModelOverride() ?? '';
         $this->aiImageProviderOverride = $settings->aiImageProviderOverride?->value ?? '';
         $this->aiImageModelOverride = $settings->imageModelOverride() ?? '';
+        $this->aiImageEditModelOverride = $settings->imageEditModelOverride() ?? '';
+        $this->aiClassificationProviderOverride = $settings->aiClassificationProviderOverride?->value ?? '';
+        $this->aiClassificationModelOverride = $settings->classificationModelOverride() ?? '';
+    }
+
+    public function updatedAiImageProviderOverride(): void
+    {
+        $this->aiImageModelOverride = '';
+        $this->aiImageEditModelOverride = '';
     }
 
     public function save(): void
@@ -43,6 +58,9 @@ class KiEinstellungen extends Component
             'aiTextModelOverride' => 'nullable|string|max:100',
             'aiImageProviderOverride' => ['nullable', 'string', Rule::enum(AiProvider::class)],
             'aiImageModelOverride' => 'nullable|string|max:100',
+            'aiImageEditModelOverride' => 'nullable|string|max:150',
+            'aiClassificationProviderOverride' => ['nullable', 'string', Rule::enum(AiProvider::class)],
+            'aiClassificationModelOverride' => 'nullable|string|max:150',
         ]);
 
         $model = IntranetAppBestellungenSettings::current();
@@ -60,11 +78,14 @@ class KiEinstellungen extends Component
         $values['aiTextModelOverride'] = $this->blankToNull($this->aiTextModelOverride);
         $values['aiImageProviderOverride'] = $this->providerOrNull($this->aiImageProviderOverride);
         $values['aiImageModelOverride'] = $this->blankToNull($this->aiImageModelOverride);
+        $values['aiImageEditModelOverride'] = $this->blankToNull($this->aiImageEditModelOverride);
+        $values['aiClassificationProviderOverride'] = $this->providerOrNull($this->aiClassificationProviderOverride);
+        $values['aiClassificationModelOverride'] = $this->blankToNull($this->aiClassificationModelOverride);
 
         $model->settings = AppSettings::from($values);
         $model->save();
 
-        unset($this->baseAiTextSummary, $this->baseAiImageSummary, $this->effectiveAiTextSummary, $this->effectiveAiImageSummary);
+        unset($this->baseAiTextSummary, $this->baseAiImageSummary, $this->baseAiClassificationSummary, $this->effectiveAiTextSummary, $this->effectiveAiImageSummary, $this->effectiveAiClassificationSummary);
 
         Flux::toast(
             heading: 'Gespeichert',
@@ -92,6 +113,15 @@ class KiEinstellungen extends Component
     }
 
     #[Computed]
+    public function baseAiClassificationSummary(): string
+    {
+        $base = app(IntranetBaseAiConfigSourceInterface::class);
+        $model = $base->classificationModel() ?? 'Provider-Standard';
+
+        return $base->classificationProvider()->label().' / '.$model;
+    }
+
+    #[Computed]
     public function effectiveAiTextSummary(): string
     {
         $resolved = app(AiConfigResolverInterface::class)->resolve('bestellungen', AiCapability::Agent);
@@ -103,6 +133,14 @@ class KiEinstellungen extends Component
     public function effectiveAiImageSummary(): string
     {
         $resolved = app(AiConfigResolverInterface::class)->resolve('bestellungen', AiCapability::Image);
+
+        return $resolved->provider->label().' / '.($resolved->model ?? 'Provider-Standard');
+    }
+
+    #[Computed]
+    public function effectiveAiClassificationSummary(): string
+    {
+        $resolved = app(AiConfigResolverInterface::class)->resolve('bestellungen', AiCapability::Classification);
 
         return $resolved->provider->label().' / '.($resolved->model ?? 'Provider-Standard');
     }
