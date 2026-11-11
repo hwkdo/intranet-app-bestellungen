@@ -8,7 +8,7 @@
                 Die Auswahl legt fest, welche Felder im Formular erscheinen. Sie können die Art später nicht mehr wechseln.
             </flux:text>
 
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <a
                     href="{{ $this->internUrl() }}"
                     wire:navigate
@@ -46,6 +46,27 @@
                             </flux:text>
                             <flux:button variant="primary" icon="arrow-right" class="mt-auto w-full pointer-events-none">
                                 Extern starten
+                            </flux:button>
+                        </div>
+                    </flux:card>
+                </a>
+
+                <a
+                    href="{{ $this->auftragsvergabeUrl() }}"
+                    wire:navigate
+                    class="group block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 sm:col-span-2 lg:col-span-1"
+                >
+                    <flux:card class="h-full text-zinc-800 dark:text-slate-100 transition group-hover:ring-2 group-hover:ring-amber-500/60 dark:group-hover:ring-amber-400/50">
+                        <div class="flex flex-col gap-3 p-1">
+                            <div class="flex items-center gap-3">
+                                <flux:icon name="document-check" class="size-8 text-amber-600 dark:text-amber-400" />
+                                <flux:heading size="lg" class="text-zinc-900 dark:text-white">Auftragsvergabe mit Angebotsbezug</flux:heading>
+                            </div>
+                            <flux:text class="text-zinc-600 dark:text-white/70">
+                                Zuerst Angebote verschiedener Anbieter sammeln. Der Auftragnehmer ergibt sich aus dem Angebot, das am Ende übernommen wird.
+                            </flux:text>
+                            <flux:button variant="primary" icon="arrow-right" class="mt-auto w-full pointer-events-none">
+                                Auftragsvergabe starten
                             </flux:button>
                         </div>
                     </flux:card>

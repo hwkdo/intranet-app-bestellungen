@@ -20,8 +20,12 @@ enum AktionTyp: string
     case AngebotViaOutlookHochgeladen = 'angebot_via_outlook_hochgeladen';
     case AngebotExtraktionAbgeschlossen = 'angebot_extraktion_abgeschlossen';
     case AngebotExtraktionFehlgeschlagen = 'angebot_extraktion_fehlgeschlagen';
+    case AngebotGeaendert = 'angebot_geaendert';
     case NotizHinzugefuegt = 'notiz_hinzugefuegt';
     case Wiederholt = 'wiederholt';
+    case AuftragszeileHinzugefuegt = 'auftragszeile_hinzugefuegt';
+    case AuftragszeileGeaendert = 'auftragszeile_geaendert';
+    case AuftragszeileEntfernt = 'auftragszeile_entfernt';
 
     public function label(): string
     {
@@ -40,8 +44,12 @@ enum AktionTyp: string
             self::AngebotViaOutlookHochgeladen => 'Angebot via Outlook hochgeladen',
             self::AngebotExtraktionAbgeschlossen => 'Angebots-Extraktion abgeschlossen',
             self::AngebotExtraktionFehlgeschlagen => 'Angebots-Extraktion fehlgeschlagen',
+            self::AngebotGeaendert => 'Angebotsangaben geändert',
             self::NotizHinzugefuegt => 'Notiz hinzugefügt',
             self::Wiederholt => 'Wiederholt aus Vorlage',
+            self::AuftragszeileHinzugefuegt => 'Auftragszeile hinzugefügt',
+            self::AuftragszeileGeaendert => 'Auftragszeile geändert',
+            self::AuftragszeileEntfernt => 'Auftragszeile entfernt',
         };
     }
 }

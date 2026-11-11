@@ -8,6 +8,7 @@ use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
 use Hwkdo\IntranetAppBestellungen\Services\Api\AngebotPdfMetadataExtractionService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
+use Hwkdo\IntranetAppBestellungen\Services\Lieferant\LieferantErkennungService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -35,6 +36,7 @@ class ExtractAngebotMetadataJob implements ShouldQueue
     public function handle(
         AngebotPdfMetadataExtractionService $extractionService,
         BestellungWorkflow $workflow,
+        LieferantErkennungService $lieferantErkennung,
     ): void {
         $angebot = Angebot::query()->find($this->angebotId);
         if (! $angebot) {
@@ -48,15 +50,27 @@ class ExtractAngebotMetadataJob implements ShouldQueue
 
         $result = $extractionService->extract($angebot);
 
+        $erkannterName = $angebot->lieferantenname ?: $result['supplier_name'];
+        $zugeordnet = filled($angebot->lieferantennummer) || ! filled($erkannterName)
+            ? null
+            : $lieferantErkennung->zuordnen((string) $erkannterName);
+
         $angebot->forceFill([
-            'lieferantenname' => $angebot->lieferantenname ?: $result['supplier_name'],
+            'lieferantenname' => $zugeordnet?->lieferantenname ?? $erkannterName,
+            'lieferantennummer' => $angebot->lieferantennummer ?: $zugeordnet?->lieferantennummer,
             'nummer' => $angebot->nummer ?: $result['reference_number'],
+            'angebotsdatum' => $angebot->angebotsdatum?->toDateString() ?: $result['offer_date'],
+            'betrag_netto' => $angebot->betrag_netto ?: $result['net_amount'],
             'betrag' => $angebot->betrag ?: $result['amount'],
             'extraction_status' => 'done',
             'extraction_source' => $result['source'],
             'extraction_payload' => array_merge($result['payload'], [
                 'method' => $result['method'] ?? null,
                 'provider' => $result['provider'] ?? null,
+                'erkannter_lieferant' => $result['supplier_name'] ?? null,
+                'lieferant_erkennung' => filled($angebot->lieferantennummer) || $zugeordnet !== null
+                    ? 'eindeutig'
+                    : (filled($erkannterName) ? 'offen' : 'kein_name'),
             ]),
             'extracted_at' => now(),
             'extraction_error' => null,

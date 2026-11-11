@@ -33,6 +33,24 @@ class IntranetAppBestellungenServiceProvider extends PackageServiceProvider
             ->hasCommand(SyncLieferantenNutzungCommand::class);
     }
 
+    public function register(): void
+    {
+        parent::register();
+
+        // Composer lädt database/factories erst, wenn das Paket neu veröffentlicht wurde.
+        spl_autoload_register(static function (string $class): void {
+            $prefix = 'Hwkdo\\IntranetAppBestellungen\\Database\\Factories\\';
+            if (! str_starts_with($class, $prefix)) {
+                return;
+            }
+
+            $path = dirname(__DIR__).'/database/factories/'.str_replace('\\', '/', substr($class, strlen($prefix))).'.php';
+            if (is_file($path)) {
+                require_once $path;
+            }
+        });
+    }
+
     public function bootingPackage(): void
     {
         Livewire::addNamespace(

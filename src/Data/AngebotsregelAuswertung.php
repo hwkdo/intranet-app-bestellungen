@@ -17,6 +17,7 @@ class AngebotsregelAuswertung extends Data
         public bool $ausnahmeErlaubt = true,
         public float $abBetrag = 0,
         public ?string $hinweisText = null,
+        public bool $anwendbar = true,
     ) {}
 
     public function fehlendVergleichsangebote(): int
@@ -26,6 +27,10 @@ class AngebotsregelAuswertung extends Data
 
     public function zusammenfassung(): string
     {
+        if (! $this->anwendbar) {
+            return '';
+        }
+
         if (! $this->pruefungAktiv) {
             return 'Für diesen Betrag sind keine Vergleichsangebote erforderlich.';
         }

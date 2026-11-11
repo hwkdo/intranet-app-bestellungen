@@ -3,8 +3,13 @@
         :heading="'Bestellung ' . $bestellung->nummer"
         :subheading="$bestellung->betreff ?? 'Detail'"
     >
-        <div class="grid gap-6 lg:grid-cols-3">
-            <flux:card class="lg:col-span-2">
+        <div
+            class="grid gap-6"
+            x-data="{ stammdatenOffen: false }"
+            :class="stammdatenOffen ? 'lg:grid-cols-3' : 'grid-cols-1'"
+        >
+            <div class="min-w-0" :class="stammdatenOffen ? 'lg:col-span-2' : ''">
+            <flux:card>
                 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <div class="flex items-center gap-3">
                         <flux:badge :color="$bestellung->status?->color()">
@@ -51,7 +56,7 @@
                                 Zur Freigabe einreichen
                             </flux:button>
                         @elseif ($bestellung->status === \Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus::Entwurf && $bestellung->user_id === auth()->id())
-                            <flux:tooltip content="Angebotsvoraussetzungen auf dem Reiter „Angebote / Begründung“ erfüllen">
+                            <flux:tooltip :content="$this->einreichenGesperrtHinweis()">
                                 <flux:button size="sm" variant="primary" icon="paper-airplane" disabled>
                                     Zur Freigabe einreichen
                                 </flux:button>
@@ -82,10 +87,42 @@
                     </div>
                 </div>
 
+                <button
+                    type="button"
+                    x-show="! stammdatenOffen"
+                    x-cloak
+                    x-on:click="stammdatenOffen = true"
+                    class="mb-4 flex w-full items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-start transition hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                >
+                    <flux:icon.identification variant="mini" class="shrink-0 text-zinc-500 dark:text-white/70" />
+                    <span class="shrink-0 font-medium text-zinc-800 dark:text-white">Stammdaten</span>
+                    <span class="min-w-0 flex-1 truncate text-sm text-zinc-500 dark:text-white/60">
+                        @if ($bestellung->istIntern() && $bestellung->internerEmpfaenger)
+                            {{ $bestellung->internerEmpfaenger->vorname }} {{ $bestellung->internerEmpfaenger->nachname }}
+                        @elseif ($bestellung->istAuftragsvergabe() && ! filled($bestellung->lieferantenname))
+                            Auftragnehmer offen
+                        @else
+                            {{ $bestellung->lieferantenname ?: '—' }}
+                        @endif
+                        · {{ number_format((float) $bestellung->gesamtbetrag, 2, ',', '.') }} €
+                        @if (filled($bestellung->kostenstelle))
+                            · {{ $bestellung->kostenstelle }}
+                        @endif
+                    </span>
+                    <span class="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-zinc-800 dark:text-white/80">
+                        Anzeigen
+                        <flux:icon.chevron-right variant="mini" />
+                    </span>
+                </button>
+
                 <flux:tab.group>
                     <flux:tabs wire:model.live="activeTab">
-                        <flux:tab name="positionen" icon="list-bullet">Positionen</flux:tab>
-                        <flux:tab name="angebote" icon="document-text">Angebote / Begründung</flux:tab>
+                        @if ($bestellung->istAuftragsvergabe())
+                            <flux:tab name="auftrag" icon="document-check">Auftragszeilen</flux:tab>
+                        @else
+                            <flux:tab name="positionen" icon="list-bullet">Positionen</flux:tab>
+                        @endif
+                        <flux:tab name="angebote" icon="document-text">{{ $bestellung->istAuftragsvergabe() ? 'Angebote' : 'Angebote / Begründung' }}</flux:tab>
                         <flux:tab name="d3" icon="cloud">D3-Dokumente</flux:tab>
                         <flux:tab name="notizen" icon="chat-bubble-left-ellipsis">Notizen</flux:tab>
                         <flux:tab name="verlauf" icon="clock">Verlauf</flux:tab>
@@ -200,38 +237,52 @@
                         @endif
                     </flux:tab.panel>
 
+                    <flux:tab.panel name="auftrag">
+                        @include('intranet-app-bestellungen::livewire.apps.bestellungen.partials.auftragszeilen')
+                    </flux:tab.panel>
+
                     <flux:tab.panel name="angebote">
+                        <div @if ($this->angebotAnalyseLaeuft) wire:poll.5s.visible @endif>
                         @php($angebotsAuswertung = $this->angebotsregelAuswertung)
-                        <flux:callout
-                            :icon="$angebotsAuswertung->bereit ? 'check-circle' : 'information-circle'"
-                            :variant="$angebotsAuswertung->bereit ? 'success' : 'warning'"
-                            class="mb-4"
-                        >
-                            <flux:callout.heading>Angebotsvoraussetzungen</flux:callout.heading>
-                            <flux:callout.text>
-                                {{ $angebotsAuswertung->zusammenfassung() }}
-                                @if ($angebotsAuswertung->pruefungAktiv)
-                                    <br><span class="text-sm opacity-80">D3-Übertragung von Angeboten und Bestellschein erfolgt erst beim Abschluss „Bestellen“.</span>
-                                @endif
-                            </flux:callout.text>
-                        </flux:callout>
+                        @if ($this->angebotAnalyseLaeuft)
+                            <flux:callout icon="arrow-path" variant="secondary" class="mb-4">
+                                Die Analyse läuft im Hintergrund. Der Status aktualisiert sich von selbst.
+                            </flux:callout>
+                        @endif
+                        @if ($angebotsAuswertung->anwendbar)
+                            <flux:callout
+                                :icon="$angebotsAuswertung->bereit ? 'check-circle' : 'information-circle'"
+                                :variant="$angebotsAuswertung->bereit ? 'success' : 'warning'"
+                                class="mb-4"
+                            >
+                                <flux:callout.heading>Angebotsvoraussetzungen</flux:callout.heading>
+                                <flux:callout.text>
+                                    {{ $angebotsAuswertung->zusammenfassung() }}
+                                    @if ($angebotsAuswertung->pruefungAktiv)
+                                        <br><span class="text-sm opacity-80">D3-Übertragung von Angeboten und Bestellschein erfolgt erst beim Abschluss „Bestellen“.</span>
+                                    @endif
+                                </flux:callout.text>
+                            </flux:callout>
+                        @endif
 
                         @if ($this->kannAngeboteErfassen())
-                            @if ($angebotsAuswertung->hatAusnahmeBegruendung)
+                            @if ($angebotsAuswertung->anwendbar && $angebotsAuswertung->hatAusnahmeBegruendung)
                                 <flux:callout icon="information-circle" variant="secondary" class="mb-4">
                                     Es ist bereits eine Ausnahme-Begründung erfasst. Weitere Vergleichsangebote sind optional.
                                 </flux:callout>
                             @endif
 
                             <form wire:submit="angebotSpeichern" class="space-y-3 mb-6">
-                                <flux:select wire:model.live="angebotTyp" label="Typ">
-                                    <flux:select.option value="angebot">Vergleichsangebot (PDF)</flux:select.option>
-                                    @if (! $angebotsAuswertung->hatAusnahmeBegruendung)
-                                        <flux:select.option value="begruendung">Ausnahme-Begründung (Text)</flux:select.option>
-                                    @endif
-                                </flux:select>
+                                @if ($angebotsAuswertung->anwendbar)
+                                    <flux:select wire:model.live="angebotTyp" label="Typ">
+                                        <flux:select.option value="angebot">Vergleichsangebot (PDF)</flux:select.option>
+                                        @if (! $angebotsAuswertung->hatAusnahmeBegruendung)
+                                            <flux:select.option value="begruendung">Ausnahme-Begründung (Text)</flux:select.option>
+                                        @endif
+                                    </flux:select>
+                                @endif
 
-                                @if ($angebotTyp === 'begruendung')
+                                @if ($angebotsAuswertung->anwendbar && $angebotTyp === 'begruendung')
                                     <flux:textarea
                                         wire:model="angebotBegruendung"
                                         label="Ausnahme-Begründung"
@@ -244,17 +295,19 @@
                                     <div class="grid gap-3 md:grid-cols-2">
                                         <flux:input wire:model="angebotLieferant" label="Lieferant (optional)" />
                                         <flux:input wire:model="angebotNummer" label="Angebots-Nr. (optional)" />
-                                        <flux:input wire:model="angebotBetrag" type="number" step="0.01" label="Betrag (€, optional)" />
-                                        <flux:input type="file" wire:model="angebotPdf" label="Angebots-PDF" accept="application/pdf,.pdf" class="md:col-span-2" />
+                                        <flux:input wire:model="angebotDatum" type="date" label="Angebotsdatum (optional)" />
+                                        <flux:input wire:model="angebotBetragNetto" type="number" step="0.01" label="Betrag netto (€, optional)" />
+                                        <flux:input wire:model="angebotBetrag" type="number" step="0.01" label="Betrag brutto (€, optional)" />
+                                        <flux:input type="file" wire:model="angebotPdf" label="Angebots-PDF" accept="application/pdf,.pdf" />
                                         <flux:error name="angebotPdf" class="md:col-span-2" />
                                     </div>
                                     <flux:callout icon="sparkles" variant="secondary">
-                                        Wenn Lieferant, Angebotsnummer oder Betrag leer bleiben, werden diese Felder automatisch per KI aus dem PDF ermittelt.
+                                        Wenn Lieferant, Angebotsnummer, Datum, Netto oder Brutto leer bleiben, werden diese Felder automatisch per KI aus dem PDF ermittelt.
                                     </flux:callout>
                                 @endif
 
                                 <flux:button type="submit" variant="primary" icon="plus">
-                                    {{ $angebotTyp === 'begruendung' ? 'Ausnahme-Begründung speichern' : 'Vergleichsangebot speichern' }}
+                                    {{ $angebotsAuswertung->anwendbar && $angebotTyp === 'begruendung' ? 'Ausnahme-Begründung speichern' : ($bestellung->istAuftragsvergabe() ? 'Angebot speichern' : 'Vergleichsangebot speichern') }}
                                 </flux:button>
                             </form>
                         @else
@@ -264,69 +317,130 @@
                         @endif
 
                         @if ($bestellung->angebote->isEmpty())
-                            <flux:text class="text-zinc-500">Keine Angebote oder Begründungen erfasst.</flux:text>
+                            <flux:text class="text-zinc-500">{{ $bestellung->istAuftragsvergabe() ? 'Keine Angebote erfasst.' : 'Keine Angebote oder Begründungen erfasst.' }}</flux:text>
                         @else
-                            <flux:table>
+                            <flux:table class="w-full">
+                                <colgroup>
+                                    @unless ($bestellung->istAuftragsvergabe())
+                                        <col style="width: 5%" />
+                                    @endunless
+                                    <col style="width: {{ $bestellung->istAuftragsvergabe() ? '20%' : '15%' }}" />
+                                    <col style="width: 13%" />
+                                    <col style="width: 12%" />
+                                    <col style="width: 13%" />
+                                    <col style="width: 13%" />
+                                    <col style="width: 9%" />
+                                    <col style="width: 6%" />
+                                    <col style="width: 6%" />
+                                    <col style="width: 8%" />
+                                </colgroup>
                                 <flux:table.columns>
-                                    <flux:table.column>Typ</flux:table.column>
+                                    @unless ($bestellung->istAuftragsvergabe())
+                                        <flux:table.column class="px-1">Typ</flux:table.column>
+                                    @endunless
                                     <flux:table.column>Lieferant</flux:table.column>
                                     <flux:table.column>Nummer</flux:table.column>
-                                    <flux:table.column class="text-right">Betrag</flux:table.column>
-                                    <flux:table.column>D3</flux:table.column>
-                                    <flux:table.column>PDF</flux:table.column>
-                                    <flux:table.column>Aktion</flux:table.column>
+                                    <flux:table.column>Datum</flux:table.column>
+                                    <flux:table.column align="end">Netto</flux:table.column>
+                                    <flux:table.column align="end">Brutto</flux:table.column>
+                                    <flux:table.column align="center" class="px-1">Analyse</flux:table.column>
+                                    <flux:table.column align="center" class="px-1">D3</flux:table.column>
+                                    <flux:table.column align="center" class="px-1">PDF</flux:table.column>
+                                    <flux:table.column align="end" class="px-1">Aktion</flux:table.column>
                                 </flux:table.columns>
                                 <flux:table.rows>
                                     @foreach ($bestellung->angebote as $angebot)
                                         <flux:table.row :key="$angebot->id">
-                                            <flux:table.cell>
-                                                <flux:badge size="sm" :color="$angebot->typ === 'begruendung' ? 'amber' : 'sky'">
-                                                    {{ $angebot->typ === 'begruendung' ? 'Begründung' : 'Angebot' }}
-                                                </flux:badge>
+                                            @unless ($bestellung->istAuftragsvergabe())
+                                                <flux:table.cell align="center" class="px-1">
+                                                    @if ($angebot->typ === 'begruendung')
+                                                        <flux:tooltip content="Begründung">
+                                                            <flux:icon.chat-bubble-left-ellipsis variant="mini" class="text-amber-600 dark:text-amber-400" />
+                                                        </flux:tooltip>
+                                                    @else
+                                                        <flux:tooltip content="Angebot">
+                                                            <flux:icon.document-text variant="mini" class="text-sky-600 dark:text-sky-400" />
+                                                        </flux:tooltip>
+                                                    @endif
+                                                </flux:table.cell>
+                                            @endunless
+                                            <flux:table.cell class="overflow-hidden">
+                                                @include('intranet-app-bestellungen::livewire.apps.bestellungen.partials.angebot-lieferant', ['angebot' => $angebot])
                                             </flux:table.cell>
-                                            <flux:table.cell>{{ $angebot->lieferantenname }}</flux:table.cell>
-                                            <flux:table.cell>{{ $angebot->nummer }}</flux:table.cell>
-                                            <flux:table.cell class="text-right">
+                                            <flux:table.cell class="overflow-hidden">
+                                                <span class="block truncate">{{ $angebot->nummer }}</span>
+                                            </flux:table.cell>
+                                            <flux:table.cell>{{ $angebot->angebotsdatum?->format('d.m.Y') }}</flux:table.cell>
+                                            <flux:table.cell align="end" class="tabular-nums">
+                                                @if ($angebot->betrag_netto)
+                                                    {{ number_format((float) $angebot->betrag_netto, 2, ',', '.') }} €
+                                                @endif
+                                            </flux:table.cell>
+                                            <flux:table.cell align="end" class="tabular-nums">
                                                 @if ($angebot->betrag)
                                                     {{ number_format((float) $angebot->betrag, 2, ',', '.') }} €
                                                 @endif
                                             </flux:table.cell>
-                                            <flux:table.cell>
-                                                @if ($angebot->d3id)
-                                                    <flux:badge color="emerald" size="sm">in D3</flux:badge>
+                                            <flux:table.cell align="center" class="px-1">
+                                                @include('intranet-app-bestellungen::livewire.apps.bestellungen.partials.angebot-analyse-status', ['angebot' => $angebot])
+                                            </flux:table.cell>
+                                            <flux:table.cell align="center" class="px-1">
+                                                @if (filled($angebot->d3id) && ($angebotD3Url = $this->d3OneUrl($angebot->d3id)))
+                                                    <flux:tooltip content="In D3 öffnen">
+                                                        <a
+                                                            href="{{ $angebotD3Url }}"
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            class="inline-flex text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 dark:hover:text-emerald-300"
+                                                            aria-label="In D3 öffnen"
+                                                        >
+                                                            <flux:icon.cloud variant="mini" />
+                                                        </a>
+                                                    </flux:tooltip>
                                                 @else
-                                                    <flux:badge color="zinc" size="sm">lokal (Push bei Bestellen)</flux:badge>
+                                                    <flux:tooltip content="Lokal, Übertragung beim Bestellen">
+                                                        <flux:icon.cloud variant="mini" class="text-zinc-400" />
+                                                    </flux:tooltip>
                                                 @endif
                                             </flux:table.cell>
-                                            <flux:table.cell>
+                                            <flux:table.cell align="center" class="px-1">
                                                 @if (filled($angebot->pdf_path) || ($angebot->typ === 'begruendung' && filled($angebot->begruendung)))
                                                     <flux:button
-                                                        size="sm"
+                                                        size="xs"
                                                         variant="ghost"
                                                         icon="document-text"
+                                                        :tooltip="$angebot->typ === 'begruendung' ? 'Begründung anzeigen' : 'Angebot anzeigen'"
                                                         :href="route('apps.bestellungen.angebot.pdf.inline', ['bestellung' => $bestellung, 'angebot' => $angebot])"
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                    >
-                                                        {{ $angebot->typ === 'begruendung' ? 'Begründung anzeigen' : 'Angebot anzeigen' }}
-                                                    </flux:button>
+                                                    />
                                                 @else
-                                                    <flux:text class="text-zinc-400 text-sm">—</flux:text>
+                                                    <span class="text-zinc-400">—</span>
                                                 @endif
                                             </flux:table.cell>
-                                            <flux:table.cell>
+                                            <flux:table.cell align="end" class="px-1">
                                                 @if ($this->kannAngeboteErfassen())
-                                                    <flux:button
-                                                        size="sm"
-                                                        variant="danger"
-                                                        icon="trash"
-                                                        wire:click="angebotLoeschen({{ $angebot->id }})"
-                                                        wire:confirm="Angebot inkl. PDF-Datei wirklich löschen?"
-                                                    >
-                                                        Löschen
-                                                    </flux:button>
+                                                    <div class="flex items-center justify-end gap-0.5">
+                                                        @if ($angebot->typ === 'angebot')
+                                                            <flux:button
+                                                                size="xs"
+                                                                variant="ghost"
+                                                                icon="pencil-square"
+                                                                tooltip="Angaben"
+                                                                wire:click="angebotAngabenOeffnen({{ $angebot->id }})"
+                                                            />
+                                                        @endif
+                                                        <flux:button
+                                                            size="xs"
+                                                            variant="danger"
+                                                            icon="trash"
+                                                            tooltip="Löschen"
+                                                            wire:click="angebotLoeschen({{ $angebot->id }})"
+                                                            wire:confirm="Angebot inkl. PDF-Datei wirklich löschen?"
+                                                        />
+                                                    </div>
                                                 @else
-                                                    <flux:text class="text-zinc-400 text-sm">—</flux:text>
+                                                    <span class="text-zinc-400">—</span>
                                                 @endif
                                             </flux:table.cell>
                                         </flux:table.row>
@@ -334,6 +448,7 @@
                                 </flux:table.rows>
                             </flux:table>
                         @endif
+                        </div>
                     </flux:tab.panel>
 
                     <flux:tab.panel name="d3">
@@ -438,9 +553,16 @@
                     </flux:tab.panel>
                 </flux:tab.group>
             </flux:card>
+            </div>
 
+            <div x-show="stammdatenOffen" x-cloak>
             <flux:card>
-                <flux:heading size="lg" class="mb-3">Stammdaten</flux:heading>
+                <div class="mb-3 flex items-center justify-between gap-2">
+                    <flux:heading size="lg">Stammdaten</flux:heading>
+                    <flux:button size="sm" variant="ghost" icon="chevron-right" x-on:click="stammdatenOffen = false">
+                        Ausblenden
+                    </flux:button>
+                </div>
                 <dl class="space-y-2 text-sm">
                     @if ($bestellung->projekt)
                         <div>
@@ -467,8 +589,14 @@
                         </div>
                     @endif
                     <div>
-                        <dt class="text-zinc-500">Lieferant{{ $bestellung->benoetigtFinalenLieferantenVorD3() ? ' (vorläufig)' : '' }}</dt>
-                        <dd>{{ $bestellung->lieferantenname }} ({{ $bestellung->lieferantennummer }})</dd>
+                        <dt class="text-zinc-500">{{ $bestellung->istAuftragsvergabe() ? 'Auftragnehmer' : 'Lieferant' }}{{ $bestellung->benoetigtFinalenLieferantenVorD3() ? ' (vorläufig)' : '' }}</dt>
+                        <dd>
+                            @if ($bestellung->istAuftragsvergabe() && ! filled($bestellung->lieferantenname))
+                                Wird mit dem gewählten Angebot festgelegt
+                            @else
+                                {{ $bestellung->lieferantenname }}@if (filled($bestellung->lieferantennummer)) ({{ $bestellung->lieferantennummer }})@endif
+                            @endif
+                        </dd>
                     </div>
                     <div>
                         <dt class="text-zinc-500">Kostenstelle</dt>
@@ -498,7 +626,7 @@
                         <dd>{{ optional($bestellung->besteller)->name ?? optional($bestellung->user)->name ?? '—' }}</dd>
                     </div>
                     <div>
-                        <dt class="text-zinc-500">Gesamtbetrag</dt>
+                        <dt class="text-zinc-500">{{ $bestellung->istAuftragsvergabe() ? 'Gesamtbetrag (netto)' : 'Gesamtbetrag' }}</dt>
                         <dd class="text-lg font-semibold text-emerald-600">
                             {{ number_format((float) $bestellung->gesamtbetrag, 2, ',', '.') }} €
                         </dd>
@@ -555,6 +683,7 @@
                     </table>
                 @endif
             </flux:card>
+            </div>
         </div>
 
         <flux:modal name="freigeben-modal" :show="false">
@@ -708,6 +837,237 @@
                         <flux:icon name="arrow-path" class="size-4 animate-spin" />
                         Wird übertragen…
                     </span>
+                </flux:button>
+            </div>
+        </flux:modal>
+
+        <flux:modal name="angebote-waehlen" class="w-full max-w-2xl">
+            <flux:heading size="lg">Angebote auswählen</flux:heading>
+            <flux:text class="mt-1 mb-4">
+                Jedes gewählte Angebot wird eine eigene Zeile auf dem Auftragsschein. Der Anbieter wird der Auftragnehmer. Weitere Zeilen müssen vom selben Anbieter stammen.
+            </flux:text>
+
+            @if ($this->waehlbareAngebote->isEmpty())
+                <flux:callout icon="information-circle" variant="secondary">
+                    Es liegen keine freien Angebote vor. Laden Sie zuerst ein Angebot hoch oder erfassen Sie eine Zeile manuell.
+                </flux:callout>
+            @else
+                <div class="max-h-96 space-y-2 overflow-y-auto">
+                    @foreach ($this->waehlbareAngebote as $angebot)
+                        <label wire:key="wahl-angebot-{{ $angebot->id }}" class="flex gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 {{ $angebot->angabenVollstaendig() ? 'cursor-pointer' : 'opacity-80' }}">
+                            <flux:checkbox
+                                wire:model="ausgewaehlteAngebotIds"
+                                value="{{ $angebot->id }}"
+                                :disabled="! $angebot->angabenVollstaendig()"
+                            />
+                            <span class="min-w-0 flex-1 text-sm">
+                                <span class="block font-medium">
+                                    @include('intranet-app-bestellungen::livewire.apps.bestellungen.partials.angebot-lieferant', ['angebot' => $angebot])
+                                </span>
+                                <span class="mt-1 block text-zinc-500">
+                                    {{ $angebot->angebotsdatum?->format('d.m.Y') ?: 'Datum offen' }}
+                                    · Nr. {{ $angebot->nummer ?: 'offen' }}
+                                    · netto {{ $angebot->betrag_netto !== null ? number_format((float) $angebot->betrag_netto, 2, ',', '.').' €' : 'offen' }}
+                                    · brutto {{ $angebot->betrag !== null ? number_format((float) $angebot->betrag, 2, ',', '.').' €' : 'offen' }}
+                                </span>
+                                <span class="mt-1 flex flex-wrap items-center gap-1">
+                                    @include('intranet-app-bestellungen::livewire.apps.bestellungen.partials.angebot-analyse-status', ['angebot' => $angebot])
+                                    @if ($this->angebotWeichtVomAuftragnehmerAb($angebot))
+                                        <flux:badge size="sm" color="amber">Lieferant weicht vom Auftragnehmer ab</flux:badge>
+                                    @endif
+                                    @unless ($angebot->angabenVollstaendig())
+                                        <span class="text-xs text-amber-700 dark:text-amber-400">Fehlt: {{ implode(', ', $angebot->fehlendeAngaben()) }}</span>
+                                    @endunless
+                                </span>
+                            </span>
+                        </label>
+                    @endforeach
+                </div>
+            @endif
+
+            <div class="mt-6 flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost">Abbrechen</flux:button>
+                </flux:modal.close>
+                <flux:button variant="primary" icon="check" wire:click="angeboteAlsAuftragszeilenUebernehmen">
+                    Übernehmen
+                </flux:button>
+            </div>
+        </flux:modal>
+
+        <flux:modal name="angebot-angaben" class="w-full max-w-2xl">
+            <flux:heading size="lg">Angebotsangaben</flux:heading>
+            <flux:text class="mt-1 mb-4">
+                Wählen Sie den Lieferanten aus den Stammdaten. Nummer, Datum und Netto können Sie hier ergänzen oder korrigieren.
+            </flux:text>
+            <div class="grid gap-3 md:grid-cols-2">
+                <div class="md:col-span-2">
+                    @if (filled($angebotAngabenErkannterLieferant))
+                        <flux:text class="mb-2 text-sm">Erkannt: {{ $angebotAngabenErkannterLieferant }}</flux:text>
+                    @endif
+                    <flux:field>
+                        <flux:label>Lieferant</flux:label>
+                        <flux:select
+                            variant="combobox"
+                            wire:model.live="angebotAngabenLieferantennummer"
+                            :filter="false"
+                            clearable
+                            placeholder="Lieferant wählen…"
+                        >
+                            <x-slot name="input">
+                                <flux:select.input
+                                    wire:model.live.debounce.250ms="angebotAngabenLieferantSearch"
+                                    placeholder="Name oder Nummer eingeben…"
+                                />
+                            </x-slot>
+                            @foreach ($this->angebotAngabenLieferantenSuggestions as $lieferant)
+                                <flux:select.option
+                                    wire:key="angaben-lf-{{ $lieferant->lieferantennummer }}"
+                                    value="{{ $lieferant->lieferantennummer }}"
+                                >
+                                    {{ $lieferant->lieferantenname }} ({{ $lieferant->lieferantennummer }})
+                                </flux:select.option>
+                            @endforeach
+                            <x-slot name="empty">
+                                <flux:select.option.empty when-loading="Suche läuft…">
+                                    Keine Lieferanten gefunden.
+                                </flux:select.option.empty>
+                            </x-slot>
+                        </flux:select>
+                        <flux:error name="angebotAngabenLieferantennummer" />
+                    </flux:field>
+                    <div class="mt-2 flex justify-end">
+                        <flux:button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            wire:click="angebotFehlendenLieferantVorbereiten"
+                        >
+                            Lieferant fehlt
+                        </flux:button>
+                    </div>
+                </div>
+                <div>
+                    <flux:input wire:model="angebotAngabenNummer" label="Angebots-Nr." required />
+                    <flux:error name="angebotAngabenNummer" />
+                </div>
+                <div>
+                    <flux:input type="date" wire:model="angebotAngabenDatum" label="Angebotsdatum" required />
+                    <flux:error name="angebotAngabenDatum" />
+                </div>
+                <div>
+                    <flux:input type="number" step="0.01" min="0" wire:model="angebotAngabenNetto" label="Netto (€)" required />
+                    <flux:error name="angebotAngabenNetto" />
+                </div>
+                <div>
+                    <flux:input type="number" step="0.01" min="0" wire:model="angebotAngabenBrutto" label="Brutto (€, optional)" />
+                    <flux:error name="angebotAngabenBrutto" />
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost">Abbrechen</flux:button>
+                </flux:modal.close>
+                <flux:button variant="primary" icon="check" wire:click="angebotAngabenSpeichern">
+                    Angaben speichern
+                </flux:button>
+            </div>
+        </flux:modal>
+
+        <flux:modal name="angebot-fehlender-lieferant" class="max-w-lg">
+            <flux:heading size="lg">Lieferant fehlt</flux:heading>
+            <flux:text class="mt-1 mb-4">
+                Melden Sie einen fehlenden Lieferanten. Die Buchhaltung wird informiert und der Platzhalter-Lieferant wird für dieses Angebot gesetzt.
+            </flux:text>
+            <div class="space-y-4">
+                <flux:input wire:model="fehlenderLieferantName" label="Name" placeholder="Name des Lieferanten" required />
+                <flux:error name="fehlenderLieferantName" />
+                <flux:textarea wire:model="fehlenderLieferantAdresse" label="Adresse" placeholder="Straße, PLZ Ort" rows="3" />
+                <flux:error name="fehlenderLieferantAdresse" />
+                <flux:input wire:model="fehlenderLieferantIban" label="IBAN" placeholder="DE…" />
+                <flux:error name="fehlenderLieferantIban" />
+                <flux:input wire:model="fehlenderLieferantWebseite" label="Webseite" placeholder="https://…" />
+                <flux:error name="fehlenderLieferantWebseite" />
+            </div>
+            <div class="mt-6 flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost">Abbrechen</flux:button>
+                </flux:modal.close>
+                <flux:button variant="primary" wire:click="angebotFehlendenLieferantMelden" wire:loading.attr="disabled" wire:target="angebotFehlendenLieferantMelden">
+                    <span wire:loading.remove wire:target="angebotFehlendenLieferantMelden">Melden</span>
+                    <span wire:loading wire:target="angebotFehlendenLieferantMelden">Wird gesendet…</span>
+                </flux:button>
+            </div>
+        </flux:modal>
+
+        <flux:modal name="zeile-manuell" class="w-full max-w-2xl">
+            <flux:heading size="lg">Zeile ohne Angebot</flux:heading>
+            <flux:text class="mt-1 mb-4">
+                @if (filled($bestellung->lieferantenname))
+                    Datum, Nummer und Betrag werden von Hand erfasst. Auftragnehmer bleibt {{ $bestellung->lieferantenname }}.
+                @else
+                    Datum, Nummer und Betrag werden von Hand erfasst. Der gewählte Lieferant wird der Auftragnehmer.
+                @endif
+            </flux:text>
+
+            @if (! filled($bestellung->lieferantenname))
+                <flux:field class="mb-3">
+                    <flux:label>Auftragnehmer</flux:label>
+                    <flux:select
+                        variant="combobox"
+                        wire:model.live="manuelleZeileLieferantennummer"
+                        :filter="false"
+                        clearable
+                        placeholder="Lieferant wählen…"
+                    >
+                        <x-slot name="input">
+                            <flux:select.input
+                                wire:model.live.debounce.250ms="manuelleZeileLieferantSearch"
+                                placeholder="Name oder Nummer eingeben…"
+                            />
+                        </x-slot>
+                        @foreach ($this->manuelleLieferantenSuggestions as $lieferant)
+                            <flux:select.option
+                                wire:key="manuell-lf-{{ $lieferant->lieferantennummer }}"
+                                value="{{ $lieferant->lieferantennummer }}"
+                            >
+                                {{ $lieferant->lieferantenname }} ({{ $lieferant->lieferantennummer }})
+                            </flux:select.option>
+                        @endforeach
+                    </flux:select>
+                    <flux:error name="manuelleZeileLieferantennummer" />
+                </flux:field>
+            @endif
+
+            <div class="grid gap-3 md:grid-cols-2">
+                <div>
+                    <flux:input type="date" wire:model="manuelleZeileDatum" label="Angebotsdatum" required />
+                    <flux:error name="manuelleZeileDatum" />
+                </div>
+                <div>
+                    <flux:input wire:model="manuelleZeileNummer" label="Angebots-Nr." required />
+                    <flux:error name="manuelleZeileNummer" />
+                </div>
+                <div>
+                    <flux:input type="number" step="0.01" min="0" wire:model="manuelleZeileNetto" label="Netto (€)" required />
+                    <flux:error name="manuelleZeileNetto" />
+                </div>
+                <div>
+                    <flux:input type="number" step="0.01" min="0" wire:model="manuelleZeileBrutto" label="Brutto (€, optional)" />
+                    <flux:error name="manuelleZeileBrutto" />
+                </div>
+                <div class="md:col-span-2">
+                    <flux:textarea wire:model="manuelleZeileFreitext" label="Freitext" rows="3" />
+                    <flux:error name="manuelleZeileFreitext" />
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="ghost">Abbrechen</flux:button>
+                </flux:modal.close>
+                <flux:button variant="primary" icon="check" wire:click="manuelleAuftragszeileSpeichern">
+                    Zeile anlegen
                 </flux:button>
             </div>
         </flux:modal>

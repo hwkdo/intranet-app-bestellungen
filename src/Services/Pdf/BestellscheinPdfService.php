@@ -7,6 +7,7 @@ namespace Hwkdo\IntranetAppBestellungen\Services\Pdf;
 use App\Services\PdfService;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
+use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
@@ -20,9 +21,13 @@ class BestellscheinPdfService
 
     public function html(Bestellung $bestellung, BestellungTyp $typ = BestellungTyp::Intern): string
     {
-        $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'lieferanschriftUser', 'aktionen.user']);
+        $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'lieferanschriftUser', 'aktionen.user', 'auftragszeilen']);
 
-        return View::make('intranet-app-bestellungen::pdf.bestellschein', [
+        $view = $typ === BestellungTyp::Auftragsvergabe
+            ? 'intranet-app-bestellungen::pdf.auftragsvergabe'
+            : 'intranet-app-bestellungen::pdf.bestellschein';
+
+        return View::make($view, [
             ...$this->sharedViewData($bestellung),
             'typ' => $typ->value,
         ])->render();
@@ -91,7 +96,7 @@ class BestellscheinPdfService
         $anschrift = is_array($bestellung->lieferanschrift) ? $bestellung->lieferanschrift : [];
 
         if (empty($anschrift['strasse']) && filled($bestellung->lieferantennummer)) {
-            $cache = \Hwkdo\IntranetAppBestellungen\Models\LieferantCache::query()
+            $cache = LieferantCache::query()
                 ->where('lieferantennummer', $bestellung->lieferantennummer)
                 ->first();
 

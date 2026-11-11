@@ -22,6 +22,11 @@ class ErstellenStart extends Component
         return $this->formularUrl(BestellungTyp::Extern->value);
     }
 
+    public function auftragsvergabeUrl(): string
+    {
+        return $this->formularUrl(BestellungTyp::Auftragsvergabe->value);
+    }
+
     private function formularUrl(string $typ): string
     {
         $params = ['typ' => $typ];

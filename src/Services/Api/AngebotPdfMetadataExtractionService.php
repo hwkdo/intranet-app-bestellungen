@@ -26,6 +26,8 @@ class AngebotPdfMetadataExtractionService
      * @return array{
      *   supplier_name: ?string,
      *   reference_number: ?string,
+     *   offer_date: ?string,
+     *   net_amount: ?float,
      *   amount: ?float,
      *   source: string,
      *   method: string,
@@ -67,12 +69,16 @@ class AngebotPdfMetadataExtractionService
 
         $supplierName = $this->nullableString($structured['supplier_name'] ?? null);
         $referenceNumber = $this->nullableString($structured['reference_number'] ?? null);
+        $offerDate = $this->nullableDate($structured['offer_date'] ?? null);
+        $netAmount = $this->nullableFloat($structured['net_amount'] ?? null);
         $amount = $this->nullableFloat($structured['amount'] ?? null);
         $config = $this->aiConfig->resolve('bestellungen', AiCapability::Agent);
 
         return [
             'supplier_name' => $supplierName,
             'reference_number' => $referenceNumber,
+            'offer_date' => $offerDate,
+            'net_amount' => $netAmount,
             'amount' => $amount,
             'source' => $usesEmbeddedText ? 'text' : 'document_parse',
             'method' => 'structured',
@@ -81,7 +87,7 @@ class AngebotPdfMetadataExtractionService
                 'text_excerpt' => mb_substr($text, 0, 1500),
                 'model' => $config->model,
             ],
-            'confidence' => $this->calculateConfidence($supplierName, $referenceNumber, $amount),
+            'confidence' => $this->calculateConfidence($supplierName, $referenceNumber, $offerDate, $netAmount, $amount),
         ];
     }
 
@@ -125,17 +131,47 @@ class AngebotPdfMetadataExtractionService
         return null;
     }
 
-    private function calculateConfidence(?string $supplierName, ?string $referenceNumber, ?float $amount): float
+    private function nullableDate(mixed $value): ?string
     {
+        $raw = $this->nullableString(is_string($value) ? $value : null);
+        if ($raw === null) {
+            return null;
+        }
+
+        $normalized = str_replace('/', '.', $raw);
+
+        foreach (['Y-m-d', 'd.m.Y', 'd.m.y'] as $format) {
+            $parsed = \DateTimeImmutable::createFromFormat('!'.$format, $normalized);
+            if ($parsed instanceof \DateTimeImmutable && $parsed->format($format) === $normalized) {
+                return $parsed->format('Y-m-d');
+            }
+        }
+
+        return null;
+    }
+
+    private function calculateConfidence(
+        ?string $supplierName,
+        ?string $referenceNumber,
+        ?string $offerDate,
+        ?float $netAmount,
+        ?float $amount,
+    ): float {
         $score = 0.0;
         if ($supplierName !== null) {
-            $score += 0.45;
+            $score += 0.35;
         }
         if ($referenceNumber !== null) {
-            $score += 0.2;
+            $score += 0.15;
+        }
+        if ($offerDate !== null) {
+            $score += 0.15;
+        }
+        if ($netAmount !== null) {
+            $score += 0.15;
         }
         if ($amount !== null) {
-            $score += 0.35;
+            $score += 0.2;
         }
 
         return min(1.0, $score);

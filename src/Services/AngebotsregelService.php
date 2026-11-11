@@ -54,6 +54,14 @@ class AngebotsregelService
      */
     public function auswertung(Bestellung $bestellung): AngebotsregelAuswertung
     {
+        if ($bestellung->istAuftragsvergabe()) {
+            return new AngebotsregelAuswertung(
+                pruefungAktiv: false,
+                bereit: true,
+                anwendbar: false,
+            );
+        }
+
         $regel = $this->regelFuerBetrag((float) $bestellung->gesamtbetrag);
         $bestellung->loadMissing('angebote');
 

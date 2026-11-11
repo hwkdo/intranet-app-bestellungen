@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
@@ -50,4 +50,23 @@ it('zählt nur Ausnahme-Begründungen als Angebot typ begruendung nicht die Kopf
     ]);
 
     expect($service->istFreigabeReady($bestellung->fresh()))->toBeTrue();
+});
+
+it('nimmt Auftragsvergaben von den Vergleichsangebotsregeln aus', function (): void {
+    $settings = AppSettings::from([
+        'angebotsRegeln' => [
+            ['abBetrag' => 0, 'mindestAngebote' => 3, 'begruendungErlaubt' => false],
+        ],
+    ]);
+
+    $bestellung = Bestellung::factory()->auftragsvergabe()->create([
+        'gesamtbetrag' => 25000,
+    ]);
+
+    $auswertung = (new AngebotsregelService($settings))->auswertung($bestellung);
+
+    expect($auswertung->anwendbar)->toBeFalse()
+        ->and($auswertung->pruefungAktiv)->toBeFalse()
+        ->and($auswertung->bereit)->toBeTrue()
+        ->and($auswertung->zusammenfassung())->toBe('');
 });

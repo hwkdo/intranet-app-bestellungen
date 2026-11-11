@@ -24,7 +24,7 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])->group(function (
         ->name('apps.bestellungen.erstellen');
 
     Route::get('apps/bestellungen/erstellen/{typ}', Erstellen::class)
-        ->whereIn('typ', ['intern', 'extern'])
+        ->whereIn('typ', ['intern', 'extern', 'auftragsvergabe'])
         ->name('apps.bestellungen.erstellen.form');
 
     Route::get('apps/bestellungen/meine', Meine::class)
@@ -64,11 +64,11 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])
             ->name('apps.bestellungen.detail');
 
         Route::get('apps/bestellungen/{bestellung}/pdf/{typ}/inline', [PdfController::class, 'inline'])
-            ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise'])
+            ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise', 'auftragsvergabe'])
             ->name('apps.bestellungen.pdf.inline');
 
         Route::get('apps/bestellungen/{bestellung}/pdf/{typ}/download', [PdfController::class, 'download'])
-            ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise'])
+            ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise', 'auftragsvergabe'])
             ->name('apps.bestellungen.pdf.download');
 
         Route::get('apps/bestellungen/{bestellung}/angebote/{angebot}/pdf/inline', [AngebotPdfController::class, 'inline'])

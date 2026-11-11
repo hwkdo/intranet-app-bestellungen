@@ -9,6 +9,7 @@ use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
 use Hwkdo\D3RestLaravel\Facades\D3RestLaravel;
 use Hwkdo\D3RestLaravel\models\Bestellschein;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
+use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
 use Hwkdo\IntranetAppBestellungen\Models\Notiz;
@@ -29,9 +30,10 @@ class BestellscheinD3Service
      */
     public function push(Bestellung $bestellung, ?User $actor = null): ?string
     {
-        $bestellung->loadMissing(['positionen', 'user', 'notizen', 'projekt']);
+        $bestellung->loadMissing(['positionen', 'auftragszeilen', 'user', 'notizen', 'projekt']);
 
-        $pdfPath = $this->pdfService->buildFile($bestellung);
+        $pdfTyp = $bestellung->istAuftragsvergabe() ? BestellungTyp::Auftragsvergabe : BestellungTyp::Intern;
+        $pdfPath = $this->pdfService->buildFile($bestellung, $pdfTyp);
 
         $dokumentData = [
             'nummer' => (int) $bestellung->nummer,

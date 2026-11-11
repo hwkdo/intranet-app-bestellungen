@@ -19,6 +19,8 @@ class ApiAngebotResource extends JsonResource
             'typ' => $this->typ,
             'lieferantenname' => $this->lieferantenname,
             'nummer' => $this->nummer,
+            'angebotsdatum' => $this->angebotsdatum?->toDateString(),
+            'betrag_netto' => $this->betrag_netto,
             'betrag' => $this->betrag,
             'pdf_path' => $this->pdf_path,
             'extraction_status' => $this->extraction_status,

@@ -10,6 +10,7 @@ use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Models\Aktion;
+use Hwkdo\IntranetAppBestellungen\Models\Auftragszeile;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
 use Hwkdo\IntranetAppBestellungen\Notifications\BestellungAbgelehntNotification;
@@ -34,6 +35,7 @@ class BestellungWorkflow
     public function einreichen(Bestellung $bestellung, User $user, ?int $freigeberId = null): Bestellung
     {
         $this->ensureStatus($bestellung, [BestellungStatus::Entwurf]);
+        $this->ensureAuftragszeilenVollstaendig($bestellung);
 
         // Prüfen ob der User in dieser Betragsklasse bestellen darf
         if (! $this->wertgrenzen->darfBestellen($user, (float) $bestellung->gesamtbetrag)) {
@@ -224,6 +226,33 @@ class BestellungWorkflow
         ]);
     }
 
+    private function ensureAuftragszeilenVollstaendig(Bestellung $bestellung): void
+    {
+        if (! $bestellung->istAuftragsvergabe()) {
+            return;
+        }
+
+        $bestellung->loadMissing('auftragszeilen');
+
+        if ($bestellung->auftragszeilen->isEmpty()) {
+            throw new WorkflowException('Für die Auftragsvergabe ist mindestens eine Auftragszeile erforderlich.');
+        }
+
+        if (! filled($bestellung->lieferantenname)) {
+            throw new WorkflowException('Der Auftragnehmer fehlt. Übernehmen Sie zuerst ein Angebot.');
+        }
+
+        $unvollstaendig = $bestellung->auftragszeilen->contains(
+            fn (Auftragszeile $zeile): bool => $zeile->angebotsdatum === null
+                || ! filled($zeile->angebotsnummer)
+                || $zeile->betrag_netto === null,
+        );
+
+        if ($unvollstaendig) {
+            throw new WorkflowException('Jede Auftragszeile braucht Angebotsdatum, Angebotsnummer und Nettobetrag.');
+        }
+    }
+
     /**
      * @param  array<int, BestellungStatus>  $erlaubte
      */
@@ -357,11 +386,13 @@ class BestellungWorkflow
 
             if ($vertretung['is_absent'] === false) {
                 $ids->push((int) $kandidat->getKey());
+
                 continue;
             }
 
             if ($vertretung['deputy'] instanceof User) {
                 $ids->push((int) $vertretung['deputy']->getKey());
+
                 continue;
             }
 

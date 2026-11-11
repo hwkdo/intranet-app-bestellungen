@@ -12,16 +12,22 @@ use Hwkdo\IntranetAppBestellungen\Data\AngebotsregelAuswertung;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
+use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
+use Hwkdo\IntranetAppBestellungen\Http\Requests\MeldeFehlendenLieferantRequest;
+use Hwkdo\IntranetAppBestellungen\Jobs\ExtractAngebotMetadataJob;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
+use Hwkdo\IntranetAppBestellungen\Models\Auftragszeile;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Models\Notiz;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\Api\BestellungAngebotUploadService;
+use Hwkdo\IntranetAppBestellungen\Services\AuftragszeilenService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
+use Hwkdo\IntranetAppBestellungen\Services\Lieferant\FehlenderLieferantMeldungService;
 use Hwkdo\IntranetAppBestellungen\Services\Lieferant\LieferantSuggestionsService;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
 use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
@@ -29,7 +35,9 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
@@ -96,6 +104,10 @@ class Detail extends Component
 
     public ?string $angebotNummer = null;
 
+    public ?string $angebotDatum = null;
+
+    public ?float $angebotBetragNetto = null;
+
     public ?float $angebotBetrag = null;
 
     public ?string $angebotBegruendung = null;
@@ -106,17 +118,70 @@ class Detail extends Component
 
     public string $bestellenLieferantSearch = '';
 
+    /** @var list<int|string> */
+    public array $ausgewaehlteAngebotIds = [];
+
+    public ?string $manuelleZeileDatum = null;
+
+    public ?string $manuelleZeileNummer = null;
+
+    public ?string $manuelleZeileNetto = null;
+
+    public ?string $manuelleZeileBrutto = null;
+
+    public ?string $manuelleZeileFreitext = null;
+
+    public ?string $manuelleZeileLieferantennummer = null;
+
+    public string $manuelleZeileLieferantSearch = '';
+
+    public ?int $angebotAngabenId = null;
+
+    public ?string $angebotAngabenLieferantennummer = null;
+
+    public string $angebotAngabenLieferantSearch = '';
+
+    public ?string $angebotAngabenErkannterLieferant = null;
+
+    public string $fehlenderLieferantName = '';
+
+    public string $fehlenderLieferantAdresse = '';
+
+    public string $fehlenderLieferantIban = '';
+
+    public string $fehlenderLieferantWebseite = '';
+
+    public ?string $angebotAngabenLieferant = null;
+
+    public ?string $angebotAngabenNummer = null;
+
+    public ?string $angebotAngabenDatum = null;
+
+    public ?string $angebotAngabenNetto = null;
+
+    public ?string $angebotAngabenBrutto = null;
+
+    /** @var list<array<string, mixed>> */
+    public array $auftragszeilenDraft = [];
+
     public function mount(Bestellung $bestellung): void
     {
         $this->bestellung = $bestellung->load([
             'user', 'freigeber', 'besteller', 'internerEmpfaenger',
-            'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user', 'projekt',
+            'positionen.art', 'positionen.media', 'angebote.user', 'angebote.auftragszeile',
+            'auftragszeilen', 'notizen.user', 'aktionen.user', 'projekt',
         ]);
 
         abort_unless(
             Auth::user() !== null && $this->bestellung->istSichtbarFuer(Auth::user()),
             403,
         );
+
+        if ($this->bestellung->istAuftragsvergabe() && $this->activeTab === 'positionen') {
+            $this->activeTab = 'auftrag';
+        }
+
+        $this->syncAuftragszeilenDraft();
 
         if ($this->aktionParam === 'freigeben' && $this->kannFreigeben()) {
             Flux::modal('freigeben-modal')->show();
@@ -170,6 +235,23 @@ class Detail extends Component
             ->reject(fn (LieferantCache $l): bool => PlatzhalterLieferant::istPlatzhalter($l->lieferantennummer));
     }
 
+    #[Computed]
+    public function manuelleLieferantenSuggestions(): Collection
+    {
+        return app(LieferantSuggestionsService::class)
+            ->suche($this->manuelleZeileLieferantSearch, $this->manuelleZeileLieferantennummer)
+            ->reject(fn (LieferantCache $l): bool => PlatzhalterLieferant::istPlatzhalter($l->lieferantennummer));
+    }
+
+    #[Computed]
+    public function angebotAngabenLieferantenSuggestions(): Collection
+    {
+        return app(LieferantSuggestionsService::class)
+            ->suche($this->angebotAngabenLieferantSearch, $this->angebotAngabenLieferantennummer)
+            ->reject(fn (LieferantCache $l): bool => PlatzhalterLieferant::istPlatzhalter($l->lieferantennummer)
+                && $l->lieferantennummer !== $this->angebotAngabenLieferantennummer);
+    }
+
     /**
      * @return array<int, array{typ: string, label: string, inline_url: string}>
      */
@@ -185,17 +267,19 @@ class Detail extends Component
                     'typ' => $typ->value,
                 ]),
             ],
-            BestellungTyp::bestellscheinVarianten(),
+            BestellungTyp::bestellscheinVariantenFuer($this->bestellung->typ ?? BestellungTyp::Extern),
         );
     }
 
-    public function d3OneUrl(): ?string
+    public function d3OneUrl(?string $d3id = null): ?string
     {
-        if (! $this->bestellung->d3id) {
+        $d3id ??= $this->bestellung->d3id;
+
+        if (! filled($d3id)) {
             return null;
         }
 
-        return app(D3Client::class)->getD3OneObjectUrl((string) $this->bestellung->d3id);
+        return app(D3Client::class)->getD3OneObjectUrl((string) $d3id);
     }
 
     public function ladeD3Dokumente(): void
@@ -253,9 +337,28 @@ class Detail extends Component
 
     public function kannEinreichen(): bool
     {
-        return $this->bestellung->user_id === Auth::id()
-            && $this->bestellung->status === BestellungStatus::Entwurf
-            && $this->angebotsregelAuswertung()->bereit;
+        if ($this->bestellung->user_id !== Auth::id() || $this->bestellung->status !== BestellungStatus::Entwurf) {
+            return false;
+        }
+
+        if (! $this->angebotsregelAuswertung()->bereit) {
+            return false;
+        }
+
+        if (! $this->bestellung->istAuftragsvergabe()) {
+            return true;
+        }
+
+        return $this->auftragszeilenVollstaendig() && filled($this->bestellung->lieferantenname);
+    }
+
+    public function einreichenGesperrtHinweis(): string
+    {
+        if ($this->bestellung->istAuftragsvergabe() && (! $this->auftragszeilenVollstaendig() || ! filled($this->bestellung->lieferantenname))) {
+            return 'Mindestens eine vollständige Auftragszeile erfassen. Der Anbieter des übernommenen Angebots wird der Auftragnehmer.';
+        }
+
+        return 'Angebotsvoraussetzungen auf dem Reiter „Angebote / Begründung“ erfüllen';
     }
 
     public function kannAngeboteErfassen(): bool
@@ -651,24 +754,26 @@ class Detail extends Component
             $kopie->wiederholt_von_id = $alt->getKey();
             $kopie->save();
 
-            foreach ($alt->positionen as $pos) {
-                $newPosition = Position::create([
-                    'bestellung_id' => $kopie->getKey(),
-                    'art_id' => $pos->art_id,
-                    'nr' => $pos->nr,
-                    'menge' => $pos->menge,
-                    'einheit' => $pos->einheit,
-                    'art_nr' => $pos->art_nr,
-                    'oberbegriff' => $pos->oberbegriff,
-                    'bezeichnung' => $pos->bezeichnung,
-                    'preis' => $pos->preis,
-                    'file' => $pos->file,
-                ]);
+            if (! $alt->istAuftragsvergabe()) {
+                foreach ($alt->positionen as $pos) {
+                    $newPosition = Position::create([
+                        'bestellung_id' => $kopie->getKey(),
+                        'art_id' => $pos->art_id,
+                        'nr' => $pos->nr,
+                        'menge' => $pos->menge,
+                        'einheit' => $pos->einheit,
+                        'art_nr' => $pos->art_nr,
+                        'oberbegriff' => $pos->oberbegriff,
+                        'bezeichnung' => $pos->bezeichnung,
+                        'preis' => $pos->preis,
+                        'file' => $pos->file,
+                    ]);
 
-                $positionPdf = $pos->getFirstMedia('position_pdf');
-                if ($positionPdf) {
-                    $copiedMedia = $positionPdf->copy($newPosition, 'position_pdf');
-                    $newPosition->forceFill(['file' => $copiedMedia->getPathRelativeToRoot()])->save();
+                    $positionPdf = $pos->getFirstMedia('position_pdf');
+                    if ($positionPdf) {
+                        $copiedMedia = $positionPdf->copy($newPosition, 'position_pdf');
+                        $newPosition->forceFill(['file' => $copiedMedia->getPathRelativeToRoot()])->save();
+                    }
                 }
             }
 
@@ -722,6 +827,12 @@ class Detail extends Component
             return;
         }
 
+        if ($this->bestellung->istAuftragsvergabe() && $this->angebotTyp === 'begruendung') {
+            $this->addError('angebotTyp', 'Für eine Auftragsvergabe werden Angebote erfasst. Eine Ausnahme-Begründung gibt es hier nicht.');
+
+            return;
+        }
+
         if ($this->angebotTyp === 'begruendung') {
             $this->validate([
                 'angebotTyp' => ['required', 'in:angebot,begruendung'],
@@ -755,10 +866,14 @@ class Detail extends Component
             'angebotTyp' => ['required', 'in:angebot,begruendung'],
             'angebotLieferant' => ['nullable', 'string', 'max:255'],
             'angebotNummer' => ['nullable', 'string', 'max:100'],
+            'angebotDatum' => ['nullable', 'date'],
+            'angebotBetragNetto' => ['nullable', 'numeric'],
             'angebotBetrag' => ['nullable', 'numeric'],
             'angebotPdf' => ['required', 'file', 'mimes:pdf', 'max:10240'],
         ], [
-            'angebotPdf.required' => 'Bitte laden Sie das Vergleichsangebot als PDF hoch.',
+            'angebotPdf.required' => $this->bestellung->istAuftragsvergabe()
+                ? 'Bitte laden Sie das Angebot als PDF hoch.'
+                : 'Bitte laden Sie das Vergleichsangebot als PDF hoch.',
         ]);
 
         $angebot = app(BestellungAngebotUploadService::class)->store(
@@ -768,6 +883,8 @@ class Detail extends Component
                 'file' => $this->angebotPdf,
                 'supplier_name' => $this->angebotLieferant,
                 'reference_number' => $this->angebotNummer,
+                'offer_date' => filled($this->angebotDatum) ? $this->angebotDatum : null,
+                'net_amount' => $this->angebotBetragNetto === '' ? null : $this->angebotBetragNetto,
                 'amount' => $this->angebotBetrag === '' ? null : $this->angebotBetrag,
             ],
         );
@@ -803,7 +920,7 @@ class Detail extends Component
         );
 
         $this->refreshBestellung();
-        unset($this->angebotsregelAuswertung);
+        unset($this->angebotsregelAuswertung, $this->waehlbareAngebote);
 
         Flux::toast(
             text: 'Das Angebot wurde inkl. Datei gelöscht.',
@@ -821,24 +938,31 @@ class Detail extends Component
             payload: ['angebot_id' => $angebot->getKey(), 'typ' => $angebot->typ],
         );
 
-        $this->reset(['angebotLieferant', 'angebotNummer', 'angebotBetrag', 'angebotBegruendung', 'angebotPdf']);
+        $this->reset(['angebotLieferant', 'angebotNummer', 'angebotDatum', 'angebotBetragNetto', 'angebotBetrag', 'angebotBegruendung', 'angebotPdf']);
         $this->angebotTyp = 'angebot';
         $this->refreshBestellung();
-        unset($this->angebotsregelAuswertung);
+        unset($this->angebotsregelAuswertung, $this->waehlbareAngebote);
 
         $auswertung = $this->angebotsregelAuswertung();
+        $istAuftragsvergabe = $this->bestellung->istAuftragsvergabe();
 
         Flux::toast(
             text: $angebot->typ === 'begruendung'
                 ? 'Die Ausnahme-Begründung wurde als PDF gespeichert und kann nach dem Bestellen nach D3 übertragen werden.'
                 : ($angebot->extraction_status === 'pending'
-                    ? 'Das Vergleichsangebot wurde gespeichert. Fehlende Metadaten werden nun automatisch per KI extrahiert.'
-                    : 'Das Vergleichsangebot wurde gespeichert. Die D3-Übertragung erfolgt beim Bestellen.'),
-            heading: $angebot->typ === 'begruendung' ? 'Ausnahme-Begründung gespeichert' : 'Vergleichsangebot gespeichert',
+                    ? ($istAuftragsvergabe
+                        ? 'Das Angebot wurde gespeichert. Fehlende Metadaten werden nun automatisch per KI extrahiert.'
+                        : 'Das Vergleichsangebot wurde gespeichert. Fehlende Metadaten werden nun automatisch per KI extrahiert.')
+                    : ($istAuftragsvergabe
+                        ? 'Das Angebot wurde gespeichert. Die D3-Übertragung erfolgt beim Bestellen.'
+                        : 'Das Vergleichsangebot wurde gespeichert. Die D3-Übertragung erfolgt beim Bestellen.')),
+            heading: $angebot->typ === 'begruendung'
+                ? 'Ausnahme-Begründung gespeichert'
+                : ($istAuftragsvergabe ? 'Angebot gespeichert' : 'Vergleichsangebot gespeichert'),
             variant: 'success',
         );
 
-        if ($auswertung->bereit && $this->bestellung->status === BestellungStatus::Entwurf) {
+        if ($auswertung->anwendbar && $auswertung->bereit && $this->bestellung->status === BestellungStatus::Entwurf) {
             Flux::toast(
                 text: 'Sie können die Bestellung jetzt zur Freigabe einreichen.',
                 heading: 'Angebotsvoraussetzungen erfüllt',
@@ -890,14 +1014,453 @@ class Detail extends Component
 
     public function render(): View
     {
+        $this->bestellung->unsetRelation('angebote');
+        $this->bestellung->load(['angebote.user', 'angebote.auftragszeile']);
+
         return view('intranet-app-bestellungen::livewire.apps.bestellungen.detail');
+    }
+
+    #[Computed]
+    public function angebotAnalyseLaeuft(): bool
+    {
+        return $this->bestellung->angebote->contains(
+            fn (Angebot $angebot): bool => in_array($angebot->extraction_status, ['pending', 'processing'], true),
+        );
+    }
+
+    public function angebotAnalyseErneutStarten(int $angebotId): void
+    {
+        if (! $this->kannAngeboteErfassen()) {
+            return;
+        }
+
+        $angebot = $this->angebotFuerAngaben($angebotId);
+        if (! $angebot instanceof Angebot || $angebot->analyseStatus() !== 'fehlgeschlagen') {
+            return;
+        }
+
+        if (! filled($angebot->pdf_path)) {
+            Flux::toast(
+                heading: 'Analyse nicht möglich',
+                text: 'Für dieses Angebot liegt keine PDF-Datei vor.',
+                variant: 'warning',
+            );
+
+            return;
+        }
+
+        $angebot->forceFill([
+            'extraction_status' => 'pending',
+            'extraction_error' => null,
+        ])->save();
+
+        ExtractAngebotMetadataJob::dispatch($angebot->getKey());
+
+        $this->refreshBestellung();
+        unset($this->angebotAnalyseLaeuft, $this->waehlbareAngebote);
+
+        Flux::toast(
+            heading: 'Analyse gestartet',
+            text: 'Die Erkennung läuft erneut im Hintergrund.',
+            variant: 'success',
+        );
+    }
+
+    public function angebotAngabenOeffnen(int $angebotId): void
+    {
+        if (! $this->kannAngeboteErfassen()) {
+            return;
+        }
+
+        $angebot = $this->angebotFuerAngaben($angebotId);
+        if (! $angebot instanceof Angebot) {
+            return;
+        }
+
+        $this->angebotAngabenId = $angebot->id;
+        $this->angebotAngabenLieferantennummer = $angebot->lieferantennummer;
+        $this->angebotAngabenLieferantSearch = filled($angebot->lieferantennummer)
+            ? ''
+            : (string) ($angebot->lieferantenname ?? '');
+        $this->angebotAngabenErkannterLieferant = filled(data_get($angebot->extraction_payload, 'erkannter_lieferant'))
+            ? (string) data_get($angebot->extraction_payload, 'erkannter_lieferant')
+            : $angebot->lieferantenname;
+        $this->angebotAngabenLieferant = $angebot->lieferantenname;
+        $this->angebotAngabenNummer = $angebot->nummer;
+        $this->angebotAngabenDatum = $angebot->angebotsdatum?->toDateString();
+        $this->angebotAngabenNetto = $angebot->betrag_netto !== null ? (string) $angebot->betrag_netto : null;
+        $this->angebotAngabenBrutto = $angebot->betrag !== null ? (string) $angebot->betrag : null;
+
+        Flux::modal('angebot-angaben')->show();
+    }
+
+    public function angebotFehlendenLieferantVorbereiten(): void
+    {
+        if (! $this->kannAngeboteErfassen()) {
+            return;
+        }
+
+        if (! filled($this->fehlenderLieferantName)) {
+            $this->fehlenderLieferantName = (string) ($this->angebotAngabenErkannterLieferant ?? '');
+        }
+
+        Flux::modal('angebot-fehlender-lieferant')->show();
+    }
+
+    public function angebotFehlendenLieferantMelden(): void
+    {
+        if (! $this->kannAngeboteErfassen()) {
+            return;
+        }
+
+        $this->validate(
+            MeldeFehlendenLieferantRequest::livewireValidationRules(),
+            MeldeFehlendenLieferantRequest::validationMessages(),
+            MeldeFehlendenLieferantRequest::validationAttributes(),
+        );
+
+        try {
+            app(FehlenderLieferantMeldungService::class)->send(
+                Auth::user(),
+                $this->fehlenderLieferantName,
+                $this->fehlenderLieferantAdresse ?: null,
+                $this->fehlenderLieferantIban ?: null,
+                $this->fehlenderLieferantWebseite ?: null,
+            );
+        } catch (\Throwable $exception) {
+            Flux::toast(heading: 'Fehler', text: $exception->getMessage(), variant: 'error');
+
+            return;
+        }
+
+        $this->angebotAngabenLieferantennummer = PlatzhalterLieferant::nummer();
+        $this->angebotAngabenLieferantSearch = '';
+        $this->fehlenderLieferantName = '';
+        $this->fehlenderLieferantAdresse = '';
+        $this->fehlenderLieferantIban = '';
+        $this->fehlenderLieferantWebseite = '';
+        unset($this->angebotAngabenLieferantenSuggestions);
+
+        $platzhalter = LieferantCache::query()->where('lieferantennummer', $this->angebotAngabenLieferantennummer)->first();
+        if (! $platzhalter instanceof LieferantCache) {
+            Log::warning('Platzhalter-Lieferant nicht im Stammdaten-Cache', [
+                'lieferantennummer' => $this->angebotAngabenLieferantennummer,
+            ]);
+        }
+
+        Flux::modal('angebot-fehlender-lieferant')->close();
+        Flux::toast(text: 'Fehlender Lieferant erfolgreich gemeldet', variant: 'success');
+    }
+
+    public function angebotAngabenSpeichern(): void
+    {
+        if (! $this->kannAngeboteErfassen() || $this->angebotAngabenId === null) {
+            return;
+        }
+
+        $angebot = $this->angebotFuerAngaben($this->angebotAngabenId);
+        if (! $angebot instanceof Angebot) {
+            return;
+        }
+
+        $this->validate([
+            'angebotAngabenLieferantennummer' => ['required', 'string', 'max:50'],
+            'angebotAngabenNummer' => ['required', 'string', 'max:100'],
+            'angebotAngabenDatum' => ['required', 'date'],
+            'angebotAngabenNetto' => ['required', 'numeric', 'min:0'],
+            'angebotAngabenBrutto' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $lieferant = LieferantCache::query()
+            ->where('lieferantennummer', $this->angebotAngabenLieferantennummer)
+            ->first();
+
+        $istPlatzhalter = PlatzhalterLieferant::istPlatzhalter($this->angebotAngabenLieferantennummer);
+
+        if (! $lieferant instanceof LieferantCache && ! $istPlatzhalter) {
+            $this->addError('angebotAngabenLieferantennummer', 'Bitte wählen Sie einen Lieferanten aus den Stammdaten.');
+
+            return;
+        }
+
+        $angebot->loadMissing('auftragszeile');
+
+        try {
+            if ($angebot->auftragszeile !== null && $lieferant instanceof LieferantCache) {
+                app(AuftragszeilenService::class)->auftragnehmerAusNummer(
+                    $this->bestellung,
+                    (string) $lieferant->lieferantennummer,
+                );
+            }
+        } catch (WorkflowException $exception) {
+            $this->addError('angebotAngabenLieferantennummer', $exception->getMessage());
+
+            return;
+        }
+
+        $angebot->forceFill([
+            'lieferantenname' => $lieferant?->lieferantenname ?: 'Unbekannter Lieferant',
+            'lieferantennummer' => $lieferant?->lieferantennummer ?: $this->angebotAngabenLieferantennummer,
+            'nummer' => trim((string) $this->angebotAngabenNummer),
+            'angebotsdatum' => $this->angebotAngabenDatum,
+            'betrag_netto' => $this->angebotAngabenNetto,
+            'betrag' => filled($this->angebotAngabenBrutto) ? $this->angebotAngabenBrutto : null,
+            'extraction_status' => 'done',
+            'extraction_source' => 'manual',
+            'extraction_error' => null,
+            'extracted_at' => now(),
+        ])->save();
+
+        if ($angebot->auftragszeile !== null) {
+            $angebot->auftragszeile->update([
+                'angebotsdatum' => $angebot->angebotsdatum,
+                'angebotsnummer' => $angebot->nummer,
+                'betrag_netto' => $angebot->betrag_netto,
+                'betrag_brutto' => $angebot->betrag,
+            ]);
+            $this->bestellung->refreshGesamtbetrag();
+            $this->syncAuftragszeilenDraft();
+        }
+
+        app(BestellungWorkflow::class)->logAktion(
+            $this->bestellung,
+            Auth::user(),
+            AktionTyp::AngebotGeaendert,
+            'Angaben zum Angebot wurden manuell ergänzt.',
+            payload: ['angebot_id' => $angebot->getKey()],
+        );
+
+        $this->refreshBestellung();
+        unset($this->angebotAnalyseLaeuft, $this->waehlbareAngebote);
+        Flux::modal('angebot-angaben')->close();
+        Flux::toast(heading: 'Angaben gespeichert', text: 'Die Angebotsangaben wurden übernommen.', variant: 'success');
+    }
+
+    /**
+     * @return Collection<int, Angebot>
+     */
+    #[Computed]
+    public function waehlbareAngebote(): Collection
+    {
+        return $this->bestellung->angebote
+            ->where('typ', 'angebot')
+            ->filter(fn (Angebot $angebot): bool => $angebot->auftragszeile === null)
+            ->values();
+    }
+
+    public function angebotWeichtVomAuftragnehmerAb(Angebot $angebot): bool
+    {
+        $erkannt = mb_strtolower(trim((string) $angebot->lieferantenname));
+        $auftragnehmer = mb_strtolower(trim((string) $this->bestellung->lieferantenname));
+
+        return $erkannt !== '' && $auftragnehmer !== '' && $erkannt !== $auftragnehmer;
+    }
+
+    public function angeboteAlsAuftragszeilenUebernehmen(): void
+    {
+        if (! $this->kannAuftragszeilenBearbeiten()) {
+            return;
+        }
+
+        try {
+            $anzahl = app(AuftragszeilenService::class)->ausAngeboten(
+                $this->bestellung,
+                array_map(static fn (mixed $id): int => (int) $id, $this->ausgewaehlteAngebotIds),
+                Auth::user(),
+            );
+        } catch (WorkflowException $exception) {
+            Flux::toast(heading: 'Angebot nicht übernommen', text: $exception->getMessage(), variant: 'error');
+
+            return;
+        }
+
+        $this->ausgewaehlteAngebotIds = [];
+        $this->refreshBestellung();
+        $this->syncAuftragszeilenDraft();
+        unset($this->waehlbareAngebote);
+        Flux::modal('angebote-waehlen')->close();
+
+        Flux::toast(
+            heading: $anzahl > 0 ? 'Auftragszeilen übernommen' : 'Keine Angebote übernommen',
+            text: $anzahl > 0
+                ? $anzahl.' Angebot'.($anzahl === 1 ? '' : 'e').' als Auftragszeile übernommen. Freitext können Sie je Zeile ergänzen.'
+                : 'Die Auswahl enthält keine freien Angebote.',
+            variant: $anzahl > 0 ? 'success' : 'warning',
+        );
+    }
+
+    public function manuelleAuftragszeileSpeichern(): void
+    {
+        if (! $this->kannAuftragszeilenBearbeiten()) {
+            return;
+        }
+
+        $this->validate([
+            'manuelleZeileDatum' => ['required', 'date'],
+            'manuelleZeileNummer' => ['required', 'string', 'max:100'],
+            'manuelleZeileNetto' => ['required', 'numeric', 'min:0'],
+            'manuelleZeileBrutto' => ['nullable', 'numeric', 'min:0'],
+            'manuelleZeileFreitext' => ['nullable', 'string'],
+            'manuelleZeileLieferantennummer' => [
+                Rule::requiredIf(fn (): bool => ! filled($this->bestellung->lieferantenname)),
+                'nullable',
+                'string',
+                'max:50',
+            ],
+        ]);
+
+        try {
+            app(AuftragszeilenService::class)->manuell($this->bestellung, [
+                'angebotsdatum' => (string) $this->manuelleZeileDatum,
+                'angebotsnummer' => (string) $this->manuelleZeileNummer,
+                'betrag_netto' => $this->manuelleZeileNetto,
+                'betrag_brutto' => $this->manuelleZeileBrutto,
+                'freitext' => $this->manuelleZeileFreitext,
+                'lieferantennummer' => $this->manuelleZeileLieferantennummer,
+            ], Auth::user());
+        } catch (WorkflowException $exception) {
+            Flux::toast(heading: 'Auftragnehmer fehlt', text: $exception->getMessage(), variant: 'error');
+
+            return;
+        }
+
+        $this->reset([
+            'manuelleZeileDatum',
+            'manuelleZeileNummer',
+            'manuelleZeileNetto',
+            'manuelleZeileBrutto',
+            'manuelleZeileFreitext',
+            'manuelleZeileLieferantennummer',
+            'manuelleZeileLieferantSearch',
+        ]);
+        $this->refreshBestellung();
+        $this->syncAuftragszeilenDraft();
+        Flux::modal('zeile-manuell')->close();
+        Flux::toast(heading: 'Auftragszeile erfasst', text: 'Die Zeile ohne Angebot wurde gespeichert.', variant: 'success');
+    }
+
+    public function auftragszeileSpeichern(int $idx): void
+    {
+        if (! $this->kannAuftragszeilenBearbeiten()) {
+            return;
+        }
+
+        $this->validate([
+            'auftragszeilenDraft.'.$idx.'.angebotsdatum' => ['required', 'date'],
+            'auftragszeilenDraft.'.$idx.'.angebotsnummer' => ['required', 'string', 'max:100'],
+            'auftragszeilenDraft.'.$idx.'.betrag_netto' => ['required', 'numeric', 'min:0'],
+            'auftragszeilenDraft.'.$idx.'.betrag_brutto' => ['nullable', 'numeric', 'min:0'],
+            'auftragszeilenDraft.'.$idx.'.freitext' => ['nullable', 'string'],
+        ]);
+
+        $draft = $this->auftragszeilenDraft[$idx] ?? null;
+        if (! is_array($draft)) {
+            return;
+        }
+
+        $zeile = $this->bestellung->auftragszeilen()->whereKey($draft['id'] ?? null)->first();
+        if (! $zeile instanceof Auftragszeile) {
+            return;
+        }
+
+        app(AuftragszeilenService::class)->aktualisieren($zeile, [
+            'angebotsdatum' => $draft['angebotsdatum'] ?? null,
+            'angebotsnummer' => $draft['angebotsnummer'] ?? null,
+            'betrag_netto' => $draft['betrag_netto'] ?? null,
+            'betrag_brutto' => $draft['betrag_brutto'] ?? null,
+            'freitext' => $draft['freitext'] ?? null,
+        ], Auth::user());
+
+        $this->refreshBestellung();
+        $this->syncAuftragszeilenDraft();
+        Flux::toast(heading: 'Zeile gespeichert', text: 'Die Auftragszeile wurde aktualisiert.', variant: 'success');
+    }
+
+    public function auftragszeileEntfernen(int $zeileId): void
+    {
+        if (! $this->kannAuftragszeilenBearbeiten()) {
+            return;
+        }
+
+        $zeile = $this->bestellung->auftragszeilen()->whereKey($zeileId)->first();
+        if (! $zeile instanceof Auftragszeile) {
+            return;
+        }
+
+        app(AuftragszeilenService::class)->entfernen($zeile, Auth::user());
+        $this->refreshBestellung();
+        $this->syncAuftragszeilenDraft();
+        unset($this->waehlbareAngebote);
+        Flux::toast(heading: 'Zeile entfernt', text: 'Die Auftragszeile wurde gelöscht.', variant: 'success');
+    }
+
+    public function auftragszeileVerschieben(int $zeileId, int $richtung): void
+    {
+        if (! $this->kannAuftragszeilenBearbeiten()) {
+            return;
+        }
+
+        $zeile = $this->bestellung->auftragszeilen()->whereKey($zeileId)->first();
+        if (! $zeile instanceof Auftragszeile) {
+            return;
+        }
+
+        app(AuftragszeilenService::class)->verschieben($zeile, $richtung, Auth::user());
+        $this->refreshBestellung();
+        $this->syncAuftragszeilenDraft();
+    }
+
+    private function kannAuftragszeilenBearbeiten(): bool
+    {
+        return $this->bestellung->istAuftragsvergabe() && $this->kannBearbeiten();
+    }
+
+    private function auftragszeilenVollstaendig(): bool
+    {
+        $zeilen = $this->bestellung->auftragszeilen;
+
+        if ($zeilen->isEmpty()) {
+            return false;
+        }
+
+        return $zeilen->every(
+            fn (Auftragszeile $zeile): bool => $zeile->angebotsdatum !== null
+                && filled($zeile->angebotsnummer)
+                && $zeile->betrag_netto !== null,
+        );
+    }
+
+    private function syncAuftragszeilenDraft(): void
+    {
+        $this->auftragszeilenDraft = $this->bestellung->auftragszeilen
+            ->map(fn (Auftragszeile $zeile): array => [
+                'id' => $zeile->getKey(),
+                'angebot_id' => $zeile->angebot_id,
+                'nr' => $zeile->nr,
+                'angebotsdatum' => $zeile->angebotsdatum?->toDateString(),
+                'angebotsnummer' => $zeile->angebotsnummer,
+                'betrag_netto' => $zeile->betrag_netto,
+                'betrag_brutto' => $zeile->betrag_brutto,
+                'freitext' => $zeile->freitext,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function angebotFuerAngaben(int $angebotId): ?Angebot
+    {
+        return $this->bestellung->angebote()
+            ->where('typ', 'angebot')
+            ->whereKey($angebotId)
+            ->first();
     }
 
     private function refreshBestellung(): void
     {
         $this->bestellung = $this->bestellung->fresh([
             'user', 'freigeber', 'besteller', 'internerEmpfaenger',
-            'positionen.art', 'positionen.media', 'angebote.user', 'notizen.user', 'aktionen.user', 'projekt',
+            'positionen.art', 'positionen.media', 'angebote.user', 'angebote.auftragszeile',
+            'auftragszeilen', 'notizen.user', 'aktionen.user', 'projekt',
         ]);
     }
 

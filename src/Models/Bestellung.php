@@ -9,8 +9,8 @@ use Hwkdo\IntranetAppBestellungen\Database\Factories\BestellungFactory;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
-use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
+use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -76,7 +76,7 @@ class Bestellung extends Model
      */
     public function toSearchableArray(): array
     {
-        $this->loadMissing(['projekt', 'positionen', 'aktionen']);
+        $this->loadMissing(['projekt', 'positionen', 'aktionen', 'auftragszeilen']);
 
         return [
             'id' => (string) $this->id,
@@ -103,7 +103,7 @@ class Bestellung extends Model
      */
     protected function makeAllSearchableUsing(Builder $query): Builder
     {
-        return $query->with(['projekt', 'positionen', 'aktionen']);
+        return $query->with(['projekt', 'positionen', 'aktionen', 'auftragszeilen']);
     }
 
     /**
@@ -198,12 +198,21 @@ class Bestellung extends Model
                     $this->normalizedSearchString($position->oberbegriff),
                     $this->normalizedSearchString($position->bezeichnung),
                 ])));
-            })
+            });
+
+        $zeilen = $this->auftragszeilen
+            ->map(function (Auftragszeile $zeile): string {
+                return trim(implode(' ', array_filter([
+                    $this->normalizedSearchString($zeile->angebotsnummer),
+                    $this->normalizedSearchString($zeile->freitext),
+                ])));
+            });
+
+        return $teile->toBase()
+            ->merge($zeilen->toBase())
             ->filter()
             ->values()
-            ->all();
-
-        return implode(' ', $teile);
+            ->implode(' ');
     }
 
     private function normalizedSearchString(mixed $value): string
@@ -223,6 +232,11 @@ class Bestellung extends Model
     public function angebote(): HasMany
     {
         return $this->hasMany(Angebot::class);
+    }
+
+    public function auftragszeilen(): HasMany
+    {
+        return $this->hasMany(Auftragszeile::class)->orderBy('nr');
     }
 
     public function notizen(): HasMany
@@ -373,6 +387,15 @@ class Bestellung extends Model
 
     public function refreshGesamtbetrag(): void
     {
+        if ($this->istAuftragsvergabe()) {
+            $this->gesamtbetrag = $this->auftragszeilen()
+                ->get()
+                ->sum(fn (Auftragszeile $zeile): float => (float) $zeile->betrag_netto);
+            $this->save();
+
+            return;
+        }
+
         $this->gesamtbetrag = $this->positionen()
             ->get()
             ->sum(fn (Position $position): float => (float) $position->menge * (float) $position->preis);
@@ -392,6 +415,11 @@ class Bestellung extends Model
     public function istIntern(): bool
     {
         return $this->typ === BestellungTyp::Intern;
+    }
+
+    public function istAuftragsvergabe(): bool
+    {
+        return $this->typ === BestellungTyp::Auftragsvergabe;
     }
 
     public function benoetigtFinalenLieferantenVorD3(): bool

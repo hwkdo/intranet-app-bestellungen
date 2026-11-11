@@ -50,7 +50,7 @@ class BenNumberService
                 ->where('haushaltsjahr', $jahr)
                 ->where('nummer', 'like', $prefixUserJahr.'%')
                 ->lockForUpdate()
-                ->selectRaw('MAX(CAST(RIGHT(nummer, 3) AS UNSIGNED)) as max_seq')
+                ->selectRaw('MAX('.$this->sequenceExpression().') as max_seq')
                 ->value('max_seq') ?? 0;
 
             $nextSeq = max((int) $localMax, $legacyMax) + 1;
@@ -64,6 +64,13 @@ class BenNumberService
      * Beginnt der `username` mit "hwkdo", wird der Rest verwendet (z. B. "hwkdo1234" => "1234").
      * Fallbacks: personalnr, andernfalls die User-ID, damit die BEN immer eindeutig bleibt.
      */
+    private function sequenceExpression(): string
+    {
+        return DB::connection()->getDriverName() === 'sqlite'
+            ? 'CAST(substr(nummer, -3) AS INTEGER)'
+            : 'CAST(RIGHT(nummer, 3) AS UNSIGNED)';
+    }
+
     private function extractHwkdoNummer(User $user): string
     {
         $username = (string) ($user->username ?? '');

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Http\Requests\Api;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Validator;
 use Illuminate\Validation\Rules\File;
+use Illuminate\Validation\Validator;
 
 class StoreBestellungAngebotRequest extends FormRequest
 {
@@ -27,6 +27,8 @@ class StoreBestellungAngebotRequest extends FormRequest
             ],
             'supplier_name' => ['nullable', 'string', 'max:255'],
             'reference_number' => ['nullable', 'string', 'max:100'],
+            'offer_date' => ['nullable', 'date'],
+            'net_amount' => ['nullable', 'numeric'],
             'amount' => ['nullable', 'numeric'],
         ];
     }

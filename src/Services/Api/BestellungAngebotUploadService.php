@@ -16,6 +16,8 @@ class BestellungAngebotUploadService
      *     file: UploadedFile,
      *     supplier_name?: string|null,
      *     reference_number?: string|null,
+     *     offer_date?: string|null,
+     *     net_amount?: int|float|string|null,
      *     amount?: int|float|string|null
      * }  $payload
      */
@@ -30,16 +32,23 @@ class BestellungAngebotUploadService
             'typ' => 'angebot',
             'lieferantenname' => $payload['supplier_name'] ?? null,
             'nummer' => $payload['reference_number'] ?? null,
+            'angebotsdatum' => $payload['offer_date'] ?? null,
+            'betrag_netto' => $payload['net_amount'] ?? null,
             'betrag' => $payload['amount'] ?? null,
             'pdf_path' => $relativePath,
             'extraction_status' => 'pending',
         ]);
+
+        $offerDateMissing = trim((string) ($payload['offer_date'] ?? '')) === '';
+        $netAmountMissing = ($payload['net_amount'] ?? null) === null || trim((string) ($payload['net_amount'] ?? '')) === '';
 
         if (
             trim((string) ($payload['supplier_name'] ?? '')) === ''
             || trim((string) ($payload['reference_number'] ?? '')) === ''
             || ($payload['amount'] ?? null) === null
             || trim((string) ($payload['amount'] ?? '')) === ''
+            || $offerDateMissing
+            || $netAmountMissing
         ) {
             ExtractAngebotMetadataJob::dispatch($angebot->getKey());
         } else {

@@ -10,6 +10,8 @@ use Hwkdo\D3RestLaravel\Facades\D3RestLaravel;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
+use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
+use Hwkdo\IntranetAppBestellungen\Http\Requests\MeldeFehlendenLieferantRequest;
 use Hwkdo\IntranetAppBestellungen\Models\Art;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
@@ -18,18 +20,16 @@ use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantNutzung;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
 use Hwkdo\IntranetAppBestellungen\Models\Projekt;
-use Hwkdo\IntranetAppBestellungen\Http\Requests\MeldeFehlendenLieferantRequest;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
-use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\InterneBestellerService;
 use Hwkdo\IntranetAppBestellungen\Services\Lieferant\FehlenderLieferantMeldungService;
 use Hwkdo\IntranetAppBestellungen\Services\Lieferant\LieferantSuggestionsService;
 use Hwkdo\IntranetAppBestellungen\Services\Stammdaten\StammdatenSyncService;
+use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
 use Hwkdo\IntranetAppBestellungen\Support\D3GruppenOptionSort;
 use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
-use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -102,7 +102,7 @@ class Erstellen extends Component
 
     public function mount(string $typ): void
     {
-        if (! in_array($typ, [BestellungTyp::Intern->value, BestellungTyp::Extern->value], true)) {
+        if (! in_array($typ, [BestellungTyp::Intern->value, BestellungTyp::Extern->value, BestellungTyp::Auftragsvergabe->value], true)) {
             $this->redirectRoute('apps.bestellungen.erstellen');
 
             return;
@@ -113,10 +113,10 @@ class Erstellen extends Component
         app(StammdatenSyncService::class)->syncIfEmpty();
 
         $this->haushaltsjahr = (int) date('Y');
-        $this->positionen = [
-            $this->emptyPosition(1),
-        ];
-        $this->positionPdfs = [null];
+        $this->positionen = $this->istAuftragsvergabe()
+            ? []
+            : [$this->emptyPosition(1)];
+        $this->positionPdfs = $this->istAuftragsvergabe() ? [] : [null];
         $this->kontierung = [
             $this->emptyKontierung(),
         ];
@@ -134,6 +134,24 @@ class Erstellen extends Component
     public function istInterneBestellung(): bool
     {
         return $this->typ === BestellungTyp::Intern->value;
+    }
+
+    public function istAuftragsvergabe(): bool
+    {
+        return $this->typ === BestellungTyp::Auftragsvergabe->value;
+    }
+
+    public function formularHeading(): string
+    {
+        if ($this->istInterneBestellung()) {
+            return 'Interne Bestellung';
+        }
+
+        if ($this->istAuftragsvergabe()) {
+            return 'Auftragsvergabe mit Angebotsbezug';
+        }
+
+        return 'Externe Bestellung';
     }
 
     private function wendePlatzhalterLieferantAn(): void
@@ -226,12 +244,17 @@ class Erstellen extends Component
                 },
             ],
             'lieferantennummer' => [
-                Rule::requiredIf(fn (): bool => ! $this->istInterneBestellung()),
+                Rule::requiredIf(fn (): bool => ! $this->istInterneBestellung() && ! $this->istAuftragsvergabe()),
                 'nullable',
                 'string',
                 'max:50',
             ],
-            'lieferantenname' => ['required', 'string', 'max:255'],
+            'lieferantenname' => [
+                Rule::requiredIf(fn (): bool => ! $this->istAuftragsvergabe()),
+                'nullable',
+                'string',
+                'max:255',
+            ],
             'kostenstelle' => ['required', 'string', 'max:50'],
             'lieferanschriftUserId' => [
                 'required',
@@ -259,13 +282,15 @@ class Erstellen extends Component
                     }
                 },
             ],
-            'positionen' => ['required', 'array', 'min:1'],
-            'positionen.*.bezeichnung' => ['required', 'string', 'max:255'],
-            'positionen.*.menge' => ['required', 'integer', 'min:1'],
-            'positionen.*.preis' => ['required', 'numeric', 'min:0'],
-            'positionen.*.einheit' => ['nullable', 'string', 'max:20'],
-            'positionen.*.art_id' => ['nullable', 'integer'],
-            'positionen.*.art_nr' => ['nullable', 'string', 'max:100'],
+            ...($this->istAuftragsvergabe() ? [] : [
+                'positionen' => ['required', 'array', 'min:1'],
+                'positionen.*.bezeichnung' => ['required', 'string', 'max:255'],
+                'positionen.*.menge' => ['required', 'integer', 'min:1'],
+                'positionen.*.preis' => ['required', 'numeric', 'min:0'],
+                'positionen.*.einheit' => ['nullable', 'string', 'max:20'],
+                'positionen.*.art_id' => ['nullable', 'integer'],
+                'positionen.*.art_nr' => ['nullable', 'string', 'max:100'],
+            ]),
             'positionPdfs' => ['array'],
             'positionPdfs.*' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
             'd3GruppenAuswahl' => ['required', 'array', 'min:1'],
@@ -602,14 +627,18 @@ class Erstellen extends Component
 
     public function speichern(): void
     {
-        $this->normalizePdfPositionen();
+        if (! $this->istAuftragsvergabe()) {
+            $this->normalizePdfPositionen();
+        }
         $this->ensureLieferantennameFromCache();
         $this->alignKostenstelleBeforeSave();
         $this->validate();
 
-        foreach ($this->positionen as $idx => $position) {
-            if (($position['pdf_position'] ?? false) && empty($this->positionPdfs[$idx])) {
-                $this->addError('positionPdfs.'.$idx, 'Bitte wählen Sie für die PDF-Position eine PDF-Datei aus.');
+        if (! $this->istAuftragsvergabe()) {
+            foreach ($this->positionen as $idx => $position) {
+                if (($position['pdf_position'] ?? false) && empty($this->positionPdfs[$idx])) {
+                    $this->addError('positionPdfs.'.$idx, 'Bitte wählen Sie für die PDF-Position eine PDF-Datei aus.');
+                }
             }
         }
 
@@ -620,14 +649,14 @@ class Erstellen extends Component
         $service = app(WertgrenzenService::class);
         $workflow = app(BestellungWorkflow::class);
 
-        // Frühzeitig prüfen ob der User in dieser Betragsklasse bestellen darf
-        if (! $service->darfBestellen(Auth::user(), $this->gesamtbetrag())) {
+        // Bei der Auftragsvergabe ist der Betrag erst nach den Auftragszeilen bekannt.
+        if (! $this->istAuftragsvergabe() && ! $service->darfBestellen(Auth::user(), $this->gesamtbetrag())) {
             $this->addError('gesamtbetrag', 'Sie sind nicht berechtigt, in dieser Betragsklasse zu bestellen.');
 
             return;
         }
 
-        $bestellung = DB::transaction(function () use ($service, $workflow): Bestellung {
+        $bestellung = DB::transaction(function () use ($workflow): Bestellung {
             $nummer = app(BenNumberService::class)->next(Auth::user(), $this->haushaltsjahr);
             $lieferanschriftUser = User::query()->find($this->lieferanschriftUserId);
 
@@ -650,27 +679,29 @@ class Erstellen extends Component
                 'gesamtbetrag' => $this->gesamtbetrag(),
             ]);
 
-            foreach ($this->positionen as $idx => $pos) {
-                $position = Position::create([
-                    'bestellung_id' => $bestellung->getKey(),
-                    'art_id' => $pos['art_id'] ?? null,
-                    'nr' => $idx + 1,
-                    'menge' => $pos['menge'] ?? 1,
-                    'einheit' => $pos['einheit'] ?? null,
-                    'art_nr' => $pos['art_nr'] ?? null,
-                    'oberbegriff' => $pos['oberbegriff'] ?? null,
-                    'bezeichnung' => $pos['bezeichnung'] ?? '',
-                    'preis' => $pos['preis'] ?? 0,
-                ]);
+            if (! $this->istAuftragsvergabe()) {
+                foreach ($this->positionen as $idx => $pos) {
+                    $position = Position::create([
+                        'bestellung_id' => $bestellung->getKey(),
+                        'art_id' => $pos['art_id'] ?? null,
+                        'nr' => $idx + 1,
+                        'menge' => $pos['menge'] ?? 1,
+                        'einheit' => $pos['einheit'] ?? null,
+                        'art_nr' => $pos['art_nr'] ?? null,
+                        'oberbegriff' => $pos['oberbegriff'] ?? null,
+                        'bezeichnung' => $pos['bezeichnung'] ?? '',
+                        'preis' => $pos['preis'] ?? 0,
+                    ]);
 
-                $pdf = $this->positionPdfs[$idx] ?? null;
-                if ($pdf !== null) {
-                    $media = $position->addMedia($pdf->getRealPath())
-                        ->usingFileName($pdf->getClientOriginalName())
-                        ->toMediaCollection('position_pdf');
+                    $pdf = $this->positionPdfs[$idx] ?? null;
+                    if ($pdf !== null) {
+                        $media = $position->addMedia($pdf->getRealPath())
+                            ->usingFileName($pdf->getClientOriginalName())
+                            ->toMediaCollection('position_pdf');
 
-                    // Legacy-Kompatibilität: bestehende Zusammenführungslogik berücksichtigt weiterhin "file".
-                    $position->forceFill(['file' => $media->getPathRelativeToRoot()])->save();
+                        // Legacy-Kompatibilität: bestehende Zusammenführungslogik berücksichtigt weiterhin "file".
+                        $position->forceFill(['file' => $media->getPathRelativeToRoot()])->save();
+                    }
                 }
             }
 
@@ -682,7 +713,7 @@ class Erstellen extends Component
                         'legacy_bestellungen_count' => 0,
                     ],
                     uniqueBy: ['lieferantennummer'],
-                    update: ['v3_bestellungen_count' => \Illuminate\Support\Facades\DB::raw('v3_bestellungen_count + 1')],
+                    update: ['v3_bestellungen_count' => DB::raw('v3_bestellungen_count + 1')],
                 );
             }
 
@@ -693,6 +724,21 @@ class Erstellen extends Component
 
             return $bestellung;
         });
+
+        if ($this->istAuftragsvergabe()) {
+            Flux::toast(
+                heading: 'Auftrag angelegt',
+                text: 'Bestellnummer '.$bestellung->nummer.' wurde angelegt. Laden Sie jetzt Angebote hoch und wählen Sie daraus die Auftragszeilen.',
+                variant: 'success',
+            );
+
+            $this->redirectRoute('apps.bestellungen.detail', [
+                'bestellung' => $bestellung,
+                'tab' => 'angebote',
+            ]);
+
+            return;
+        }
 
         $auswertung = app(AngebotsregelService::class)->auswertung($bestellung);
 

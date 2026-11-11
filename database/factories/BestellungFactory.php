@@ -69,6 +69,17 @@ class BestellungFactory extends Factory
         ]);
     }
 
+    public function auftragsvergabe(): self
+    {
+        return $this->state(fn (): array => [
+            'typ' => BestellungTyp::Auftragsvergabe,
+            'interner_empfaenger_user_id' => null,
+            'lieferantennummer' => fake()->numerify('#####'),
+            'lieferantenname' => fake()->company(),
+            'gesamtbetrag' => 0,
+        ]);
+    }
+
     public function extern(): self
     {
         return $this->state(fn (): array => [

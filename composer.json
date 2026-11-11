@@ -37,7 +37,8 @@
     },
     "autoload": {
         "psr-4": {
-            "Hwkdo\\IntranetAppBestellungen\\": "src/"
+            "Hwkdo\\IntranetAppBestellungen\\": "src/",
+            "Hwkdo\\IntranetAppBestellungen\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {

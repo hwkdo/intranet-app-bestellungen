@@ -87,8 +87,10 @@
     x-effect="if ($wire?.id) { syncFromWire($wire.positionen || []); syncKontierungFromWire($wire.kontierung || []) }"
 >
     <x-intranet-app-bestellungen::bestellungen-layout
-        :heading="$this->istInterneBestellung() ? 'Interne Bestellung' : 'Externe Bestellung'"
-        subheading="Bestellschein als Entwurf anlegen – Angebote und Freigabe folgen auf der Detailseite"
+        :heading="$this->formularHeading()"
+        :subheading="$this->istAuftragsvergabe()
+            ? 'Zuerst den Auftrag anlegen. Angebote und Auftragszeilen folgen auf der Detailseite.'
+            : 'Bestellschein als Entwurf anlegen – Angebote und Freigabe folgen auf der Detailseite'"
     >
         <div class="mb-4">
             <flux:button
@@ -142,6 +144,12 @@
                         <div class="md:col-span-2">
                             <flux:callout icon="information-circle" variant="secondary">
                                 Der tatsächliche Lieferant wird vom internen Empfänger beim Abschluss der Bestellung (Status „Bestellt“) hinterlegt, bevor der Bestellschein nach D3 übertragen wird.
+                            </flux:callout>
+                        </div>
+                    @elseif ($this->istAuftragsvergabe())
+                        <div class="md:col-span-2">
+                            <flux:callout icon="information-circle" variant="secondary">
+                                Der Auftragnehmer wird hier noch nicht gewählt. Sammeln Sie zuerst Angebote verschiedener Anbieter. Der Anbieter des Angebots, das Sie später als Auftragszeile übernehmen, wird der Auftragnehmer.
                             </flux:callout>
                         </div>
                     @else
@@ -245,7 +253,7 @@
                     </flux:field>
 
                     <flux:field>
-                        <flux:label>Lieferanschrift</flux:label>
+                        <flux:label>{{ $this->istAuftragsvergabe() ? 'Auftraggeber' : 'Lieferanschrift' }}</flux:label>
                         <flux:select
                             variant="listbox"
                             wire:model="lieferanschriftUserId"
@@ -303,6 +311,7 @@
                 </div>
             </flux:card>
 
+            @unless ($this->istAuftragsvergabe())
             <flux:card>
                 <div class="flex items-center justify-between mb-4">
                     <flux:heading size="lg">Positionen</flux:heading>
@@ -482,6 +491,11 @@
                     </flux:text>
                 </div>
             </flux:card>
+            @else
+                <flux:callout icon="document-check" variant="secondary">
+                    Positionen gibt es bei der Auftragsvergabe nicht. Nach dem Anlegen laden Sie Angebote hoch und erzeugen daraus die Zeilen des Auftragsscheins.
+                </flux:callout>
+            @endunless
 
             <flux:card>
                 <div class="flex items-center justify-between mb-4">
@@ -590,11 +604,17 @@
 
             <flux:card>
                 <flux:heading size="md" class="mb-2">Vorschau Workflow</flux:heading>
-                @if ($this->freigeberHinweis())
-                    <flux:callout icon="information-circle" class="mb-2">{{ $this->freigeberHinweis() }}</flux:callout>
-                @endif
-                @if ($this->angebotsHinweis())
-                    <flux:callout icon="exclamation-triangle" variant="warning">{{ $this->angebotsHinweis() }}</flux:callout>
+                @if ($this->istAuftragsvergabe())
+                    <flux:callout icon="information-circle">
+                        Wertgrenzen werden geprüft, sobald Auftragszeilen erfasst sind und der Auftrag zur Freigabe eingereicht wird. Die hochgeladenen Angebote sind die Grundlage der Vergabe.
+                    </flux:callout>
+                @else
+                    @if ($this->freigeberHinweis())
+                        <flux:callout icon="information-circle" class="mb-2">{{ $this->freigeberHinweis() }}</flux:callout>
+                    @endif
+                    @if ($this->angebotsHinweis())
+                        <flux:callout icon="exclamation-triangle" variant="warning">{{ $this->angebotsHinweis() }}</flux:callout>
+                    @endif
                 @endif
             </flux:card>
 
@@ -609,7 +629,7 @@
                     wire:loading.attr="disabled"
                     wire:target="speichern"
                 >
-                    <span wire:loading.remove wire:target="speichern">Entwurf speichern</span>
+                    <span wire:loading.remove wire:target="speichern">{{ $this->istAuftragsvergabe() ? 'Auftrag anlegen' : 'Entwurf speichern' }}</span>
                     <span wire:loading wire:target="speichern" class="inline-flex items-center gap-2">
                         <flux:icon name="arrow-path" class="size-4 animate-spin" />
                         Wird gespeichert...
