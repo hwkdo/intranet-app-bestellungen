@@ -26,6 +26,8 @@ class KiEinstellungen extends Component
 
     public string $aiImageModelOverride = '';
 
+    public string $aiImageEditProviderOverride = '';
+
     public string $aiImageEditModelOverride = '';
 
     public string $aiClassificationProviderOverride = '';
@@ -40,6 +42,7 @@ class KiEinstellungen extends Component
         $this->aiTextModelOverride = $settings->textModelOverride() ?? '';
         $this->aiImageProviderOverride = $settings->aiImageProviderOverride?->value ?? '';
         $this->aiImageModelOverride = $settings->imageModelOverride() ?? '';
+        $this->aiImageEditProviderOverride = $settings->aiImageEditProviderOverride?->value ?? '';
         $this->aiImageEditModelOverride = $settings->imageEditModelOverride() ?? '';
         $this->aiClassificationProviderOverride = $settings->aiClassificationProviderOverride?->value ?? '';
         $this->aiClassificationModelOverride = $settings->classificationModelOverride() ?? '';
@@ -48,6 +51,10 @@ class KiEinstellungen extends Component
     public function updatedAiImageProviderOverride(): void
     {
         $this->aiImageModelOverride = '';
+    }
+
+    public function updatedAiImageEditProviderOverride(): void
+    {
         $this->aiImageEditModelOverride = '';
     }
 
@@ -58,6 +65,7 @@ class KiEinstellungen extends Component
             'aiTextModelOverride' => 'nullable|string|max:100',
             'aiImageProviderOverride' => ['nullable', 'string', Rule::enum(AiProvider::class)],
             'aiImageModelOverride' => 'nullable|string|max:100',
+            'aiImageEditProviderOverride' => ['nullable', 'string', Rule::enum(AiProvider::class)],
             'aiImageEditModelOverride' => 'nullable|string|max:150',
             'aiClassificationProviderOverride' => ['nullable', 'string', Rule::enum(AiProvider::class)],
             'aiClassificationModelOverride' => 'nullable|string|max:150',
@@ -78,6 +86,7 @@ class KiEinstellungen extends Component
         $values['aiTextModelOverride'] = $this->blankToNull($this->aiTextModelOverride);
         $values['aiImageProviderOverride'] = $this->providerOrNull($this->aiImageProviderOverride);
         $values['aiImageModelOverride'] = $this->blankToNull($this->aiImageModelOverride);
+        $values['aiImageEditProviderOverride'] = $this->providerOrNull($this->aiImageEditProviderOverride);
         $values['aiImageEditModelOverride'] = $this->blankToNull($this->aiImageEditModelOverride);
         $values['aiClassificationProviderOverride'] = $this->providerOrNull($this->aiClassificationProviderOverride);
         $values['aiClassificationModelOverride'] = $this->blankToNull($this->aiClassificationModelOverride);
@@ -107,9 +116,11 @@ class KiEinstellungen extends Component
     public function baseAiImageSummary(): string
     {
         $base = app(IntranetBaseAiConfigSourceInterface::class);
-        $model = $base->imageModel() ?? 'Provider-Standard';
+        $generate = $base->imageModel() ?? 'Provider-Standard';
+        $edit = $base->imageEditModel() ?? 'Provider-Standard';
 
-        return $base->imageProvider()->label().' / '.$model;
+        return 'Generate '.$base->imageProvider()->label().' / '.$generate
+            .', Edit '.$base->imageEditProvider()->label().' / '.$edit;
     }
 
     #[Computed]
@@ -133,8 +144,13 @@ class KiEinstellungen extends Component
     public function effectiveAiImageSummary(): string
     {
         $resolved = app(AiConfigResolverInterface::class)->resolve('bestellungen', AiCapability::Image);
+        $settings = IntranetAppBestellungenSettings::resolvedAppSettings();
+        $editProvider = $settings->imageEditProviderOverride()
+            ?? app(IntranetBaseAiConfigSourceInterface::class)->imageEditProvider();
+        $editModel = app(AiConfigResolverInterface::class)->resolveImageEditModel('bestellungen') ?? 'Provider-Standard';
 
-        return $resolved->provider->label().' / '.($resolved->model ?? 'Provider-Standard');
+        return 'Generate '.$resolved->provider->label().' / '.($resolved->model ?? 'Provider-Standard')
+            .', Edit '.$editProvider->label().' / '.$editModel;
     }
 
     #[Computed]

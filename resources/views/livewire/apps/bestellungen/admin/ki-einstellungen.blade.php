@@ -18,8 +18,10 @@
         ai-text-model-override="aiTextModelOverride"
         ai-image-provider-override="aiImageProviderOverride"
         ai-image-model-override="aiImageModelOverride"
+        ai-image-edit-provider-override="aiImageEditProviderOverride"
         ai-image-edit-model-override="aiImageEditModelOverride"
         :image-provider="$aiImageProviderOverride"
+        :image-edit-provider="$aiImageEditProviderOverride"
         ai-classification-provider-override="aiClassificationProviderOverride"
         ai-classification-model-override="aiClassificationModelOverride"
     />

@@ -47,6 +47,7 @@
                         'aiTextModelOverride',
                         'aiImageProviderOverride',
                         'aiImageModelOverride',
+                        'aiImageEditProviderOverride',
                         'aiImageEditModelOverride',
                         'aiClassificationProviderOverride',
                         'aiClassificationModelOverride',
