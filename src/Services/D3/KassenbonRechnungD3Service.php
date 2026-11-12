@@ -9,6 +9,7 @@ use App\Services\PdfService;
 use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
 use Hwkdo\D3RestLaravel\models\Zahlungsbeleg;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
+use Hwkdo\IntranetAppBestellungen\Enums\Auszahlungsart;
 use Hwkdo\IntranetAppBestellungen\Models\Kassenbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -47,7 +48,7 @@ class KassenbonRechnungD3Service
             'Nummer' => (int) $bestellung->nummer,
             'Benutzer' => $this->benutzerResolver->resolve($bestellung),
             'Abteilung' => $this->abteilungResolver->resolve($bestellung),
-            'Belegtyp_ZB' => 'Rechnung',
+            'Belegtyp_ZB' => ($kassenbon->auszahlungsart ?? Auszahlungsart::Ueberweisung)->belegtypZb(),
             'Rechnungsnummer' => filled($kassenbon->belegnummer) ? (string) $kassenbon->belegnummer : '0',
             'Nettobetrag' => $this->betrag($kassenbon->nettobetrag),
             'Bruttobetrag' => $this->betrag($kassenbon->bruttobetrag),

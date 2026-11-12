@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Models;
 
 use App\Models\User;
+use Hwkdo\IntranetAppBestellungen\Enums\Auszahlungsart;
+use Hwkdo\IntranetAppBestellungen\Enums\AuszahlungsEmpfaenger;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Storage;
@@ -24,6 +26,8 @@ class Kassenbon extends Model
             'nettobetrag' => 'decimal:2',
             'steuerbetrag' => 'decimal:2',
             'bruttobetrag' => 'decimal:2',
+            'auszahlungsempfaenger' => AuszahlungsEmpfaenger::class,
+            'auszahlungsart' => Auszahlungsart::class,
             'd3_rechnung_pushed_at' => 'datetime',
         ];
     }

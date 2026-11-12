@@ -29,5 +29,7 @@ final class NachtraeglicheBestellungEingabe
         public array $kontierung,
         public array $positionen,
         public ?int $lieferanschriftUserId,
+        public ?string $auszahlungsEmpfaenger = null,
+        public ?string $auszahlungsArt = null,
     ) {}
 }

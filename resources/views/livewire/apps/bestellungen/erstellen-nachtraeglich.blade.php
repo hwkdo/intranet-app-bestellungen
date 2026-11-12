@@ -92,6 +92,32 @@
                 <flux:callout icon="exclamation-circle" variant="danger">
                     {{ $extractionError ?: 'Die Auswertung ist fehlgeschlagen.' }}
                 </flux:callout>
+            @elseif (! $auszahlungBestaetigt)
+                <flux:card class="mx-auto max-w-2xl space-y-6">
+                    <div>
+                        <flux:heading size="lg">Art der Aus-/Rückzahlung</flux:heading>
+                        <flux:text class="mt-1">Wohin soll das Geld ausgezahlt werden?</flux:text>
+                    </div>
+                    <flux:radio.group wire:model.live="auszahlungsEmpfaenger" label="Empfänger" variant="cards">
+                        <flux:radio value="mitarbeiter" label="An mich" description="Ich habe das Geld vorgestreckt und bekomme es zurück." />
+                        <flux:radio value="lieferant" label="An den Lieferanten" description="Der Einkauf lief über das Firmen-Kundenkonto. Das Geld geht an den Lieferanten." />
+                    </flux:radio.group>
+                    <flux:error name="auszahlungsEmpfaenger" />
+                    @if ($auszahlungsEmpfaenger === 'mitarbeiter')
+                        <flux:radio.group wire:model.live="auszahlungsArt" label="Auszahlungsart" variant="cards">
+                            <flux:radio value="ueberweisung" label="Überweisung" description="Das Geld geht auf mein Konto." />
+                            <flux:radio value="bar" label="Barauszahlung" description="Ich hole das Geld an der Kasse ab." />
+                        </flux:radio.group>
+                        <flux:error name="auszahlungsArt" />
+                    @elseif ($auszahlungsEmpfaenger === 'lieferant')
+                        <flux:callout icon="information-circle">
+                            An den Lieferanten wird immer per Überweisung gezahlt.
+                        </flux:callout>
+                    @endif
+                    <div class="flex justify-end">
+                        <flux:button type="button" variant="primary" wire:click="auszahlungUebernehmen">Weiter zur Prüfung</flux:button>
+                    </div>
+                </flux:card>
             @else
                 <div class="grid gap-6 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
                     <flux:card class="space-y-3">
@@ -175,6 +201,10 @@
                                     <flux:input wire:model="betreff" label="Betreff" />
                                 </div>
                                 <div class="md:col-span-2">
+                                    <div class="mb-2 flex items-center justify-between gap-3">
+                                        <flux:text class="text-sm">Die Begründung ist aus der Auszahlung vorbereitet und kann angepasst werden.</flux:text>
+                                        <flux:button type="button" size="sm" variant="ghost" wire:click="auszahlungAendern">Auszahlung ändern</flux:button>
+                                    </div>
                                     <flux:textarea wire:model="begruendung" label="Begründung der nachträglichen Bestellung" rows="3" />
                                     <flux:error name="begruendung" />
                                 </div>

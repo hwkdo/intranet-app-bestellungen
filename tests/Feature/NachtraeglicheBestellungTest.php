@@ -181,6 +181,9 @@ it('verlangt eine Lieferantennummer, wenn der gelesene Name keinen Treffer hat',
         ->test(ErstellenNachtraeglich::class, ['beleg' => (string) $kassenbon->id])
         ->assertSet('lieferantennummer', null)
         ->assertSet('lieferantSearch', '')
+        ->set('auszahlungsEmpfaenger', 'mitarbeiter')
+        ->set('auszahlungsArt', 'ueberweisung')
+        ->call('auszahlungUebernehmen')
         ->assertSee('Voltwerk Retail GmbH')
         ->set('begruendung', 'Ersatzteil musste sofort gekauft werden.')
         ->set('kostenstelle', '1000')
@@ -193,6 +196,9 @@ it('verlangt eine Lieferantennummer, wenn der gelesene Name keinen Treffer hat',
 
     Livewire::actingAs($user)
         ->test(ErstellenNachtraeglich::class, ['beleg' => (string) $kassenbon->id])
+        ->set('auszahlungsEmpfaenger', 'mitarbeiter')
+        ->set('auszahlungsArt', 'ueberweisung')
+        ->call('auszahlungUebernehmen')
         ->set('lieferantennummer', 'Voltwerk Retail GmbH')
         ->set('begruendung', 'Ersatzteil musste sofort gekauft werden.')
         ->set('kostenstelle', '1000')
@@ -202,6 +208,59 @@ it('verlangt eine Lieferantennummer, wenn der gelesene Name keinen Treffer hat',
         ->assertSee('steht nicht in den Lieferanten');
 
     expect(Bestellung::query()->count())->toBe(0);
+});
+
+it('belegt die Begründung aus der gewählten Auszahlung', function (): void {
+    Permission::findOrCreate('see-app-bestellungen', 'web');
+
+    $user = User::factory()->create([
+        'username' => 'hwkdo42',
+        'vorname' => 'Anna',
+        'nachname' => 'Müller',
+    ]);
+    $user->givePermissionTo('see-app-bestellungen');
+
+    LieferantCache::query()->create([
+        'lieferantennummer' => '1',
+        'lieferantenname' => 'Unbeteiligt GmbH',
+    ]);
+    KostenstelleCache::query()->create([
+        'kostenstelle' => '1000',
+        'bezeichnung' => 'Test',
+    ]);
+    D3RestLaravel::shouldReceive('getUserInGroupsSoapCached')->andReturn([]);
+    D3RestLaravel::shouldReceive('getD3GroupsSoapCached')->andReturn([]);
+
+    $kassenbon = Kassenbon::query()->create([
+        'user_id' => $user->id,
+        'datei_pfad' => 'bestellungen/kassenbons/probe.pdf',
+        'mime' => 'application/pdf',
+        'extraction_status' => 'done',
+        'extraction_payload' => [
+            'structured' => ['supplier_name' => 'Voltwerk Retail GmbH'],
+            'lieferant' => [
+                'erkannter_name' => 'Voltwerk Retail GmbH',
+                'status' => 'offen',
+            ],
+        ],
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(ErstellenNachtraeglich::class, ['beleg' => (string) $kassenbon->id])
+        ->assertSee('Art der Aus-/Rückzahlung')
+        ->set('auszahlungsEmpfaenger', 'mitarbeiter')
+        ->set('auszahlungsArt', 'ueberweisung')
+        ->call('auszahlungUebernehmen')
+        ->assertSet('begruendung', 'Auszahlung per Überweisung auf das Konto von Anna Müller.')
+        ->call('auszahlungAendern')
+        ->set('auszahlungsArt', 'bar')
+        ->call('auszahlungUebernehmen')
+        ->assertSet('begruendung', 'Auszahlung per Barauszahlung an Anna Müller.')
+        ->call('auszahlungAendern')
+        ->set('auszahlungsEmpfaenger', 'lieferant')
+        ->call('auszahlungUebernehmen')
+        ->assertSet('auszahlungsArt', 'ueberweisung')
+        ->assertSet('begruendung', 'Auszahlung per Überweisung an Lieferanten Voltwerk Retail GmbH.');
 });
 
 it('merkt den aktuellen Auswertungs-Schritt am Kassenbon', function (): void {
@@ -320,6 +379,28 @@ it('überträgt BESTS und ZAHLB mit BEN, Rechnung und Platzhalter-Lieferant', fu
         ->and($zahlb['systemProperties']['property_filename'])->toContain((string) $bestellung->nummer);
 });
 
+it('überträgt eine Barauszahlung mit Belegtyp Barauszahlung', function (): void {
+    $payloads = [];
+    kassenbonD3Vorbereiten($payloads, false);
+    $user = User::factory()->create(['username' => 'hwkdo42']);
+    $kassenbon = Kassenbon::query()->create([
+        'user_id' => $user->id,
+        'datei_pfad' => 'bestellungen/kassenbons/probe.pdf',
+        'mime' => 'application/pdf',
+        'extraction_status' => 'done',
+    ]);
+
+    app(NachtraeglicheBestellungService::class)->abschliessen(
+        $kassenbon,
+        $user,
+        kassenbonEingabe('mitarbeiter', 'bar'),
+    );
+
+    $zahlb = collect($payloads)->firstWhere('objectDefinitionId', 'ZAHLB');
+
+    expect($zahlb['extendedProperties']['82'])->toBe('Barauszahlung');
+});
+
 it('lässt die Bestellung im Entwurf, wenn die Rechnung in D3 fehlschlägt', function (): void {
     $payloads = [];
     kassenbonD3Vorbereiten($payloads, true);
@@ -361,7 +442,7 @@ function kassenbonExtraktion(string $supplierName): array
     ];
 }
 
-function kassenbonEingabe(): NachtraeglicheBestellungEingabe
+function kassenbonEingabe(?string $auszahlungsEmpfaenger = null, ?string $auszahlungsArt = null): NachtraeglicheBestellungEingabe
 {
     return new NachtraeglicheBestellungEingabe(
         lieferantennummer: '7000720',
@@ -387,6 +468,8 @@ function kassenbonEingabe(): NachtraeglicheBestellungEingabe
             'preis' => 17.76,
         ]],
         lieferanschriftUserId: null,
+        auszahlungsEmpfaenger: $auszahlungsEmpfaenger,
+        auszahlungsArt: $auszahlungsArt,
     );
 }
 

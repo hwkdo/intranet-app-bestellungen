@@ -7,6 +7,8 @@ namespace Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen;
 use Flux\Flux;
 use Hwkdo\D3RestLaravel\Facades\D3RestLaravel;
 use Hwkdo\IntranetAppBestellungen\Data\NachtraeglicheBestellungEingabe;
+use Hwkdo\IntranetAppBestellungen\Enums\Auszahlungsart;
+use Hwkdo\IntranetAppBestellungen\Enums\AuszahlungsEmpfaenger;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Jobs\ExtractKassenbonJob;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Concerns\MeldetFehlendenLieferant;
@@ -25,6 +27,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -34,7 +37,9 @@ use Livewire\WithFileUploads;
 #[Title('Bestellungen – Nachträgliche Bestellung')]
 class ErstellenNachtraeglich extends Component
 {
-    use MeldetFehlendenLieferant;
+    use MeldetFehlendenLieferant {
+        meldeFehlendenLieferant as meldeFehlendenLieferantAusDemBestand;
+    }
     use WithFileUploads;
 
     private const KOSTENSTELLEN_LIMIT = 30;
@@ -67,6 +72,14 @@ class ErstellenNachtraeglich extends Component
     public string $lieferantSearch = '';
 
     public ?string $erkannterLieferantenname = null;
+
+    public ?string $auszahlungsEmpfaenger = null;
+
+    public ?string $auszahlungsArt = null;
+
+    public bool $auszahlungBestaetigt = false;
+
+    public string $begruendungVorlage = '';
 
     public string $fehlenderLieferantName = '';
 
@@ -170,15 +183,56 @@ class ErstellenNachtraeglich extends Component
         $this->ladeKassenbon();
     }
 
+    public function auszahlungUebernehmen(): void
+    {
+        if ($this->auszahlungsEmpfaenger === AuszahlungsEmpfaenger::Lieferant->value) {
+            $this->auszahlungsArt = Auszahlungsart::Ueberweisung->value;
+        }
+
+        $this->validate([
+            'auszahlungsEmpfaenger' => ['required', Rule::enum(AuszahlungsEmpfaenger::class)],
+            'auszahlungsArt' => ['required', Rule::enum(Auszahlungsart::class)],
+        ], [
+            'auszahlungsEmpfaenger.required' => 'Bitte auswählen, wer das Geld erhält.',
+            'auszahlungsArt.required' => 'Bitte Barauszahlung oder Überweisung auswählen.',
+        ]);
+
+        $this->begruendungAusVorlageSetzen();
+        $this->auszahlungBestaetigt = true;
+        $this->speichereAuszahlung();
+    }
+
+    public function auszahlungAendern(): void
+    {
+        $this->auszahlungBestaetigt = false;
+
+        if ($this->kassenbonId === null) {
+            return;
+        }
+
+        Kassenbon::query()->whereKey($this->kassenbonId)->update([
+            'auszahlungsempfaenger' => null,
+            'auszahlungsart' => null,
+        ]);
+    }
+
+    public function meldeFehlendenLieferant(): void
+    {
+        $this->meldeFehlendenLieferantAusDemBestand();
+        $this->aktualisiereAuszahlungsBegruendung();
+    }
+
     public function updatedLieferantennummer(?string $nummer): void
     {
         if (! $nummer) {
             $this->lieferantenname = null;
+            $this->aktualisiereAuszahlungsBegruendung();
 
             return;
         }
 
         $this->fillLieferantennameFromCache($nummer);
+        $this->aktualisiereAuszahlungsBegruendung();
     }
 
     public function updatedBelegdatum(?string $datum): void
@@ -252,6 +306,16 @@ class ErstellenNachtraeglich extends Component
     public function rules(): array
     {
         return [
+            'auszahlungsEmpfaenger' => ['required', Rule::enum(AuszahlungsEmpfaenger::class)],
+            'auszahlungsArt' => [
+                'required',
+                Rule::enum(Auszahlungsart::class),
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($this->auszahlungsEmpfaenger === AuszahlungsEmpfaenger::Lieferant->value && $value === Auszahlungsart::Barauszahlung->value) {
+                        $fail('An den Lieferanten wird nur per Überweisung gezahlt.');
+                    }
+                },
+            ],
             'lieferantennummer' => [
                 'required',
                 'string',
@@ -321,6 +385,8 @@ class ErstellenNachtraeglich extends Component
     {
         return [
             'lieferantennummer.required' => 'Bitte einen Lieferanten wählen. Wenn er nicht in der Liste steht, „Lieferant fehlt“ verwenden.',
+            'auszahlungsEmpfaenger.required' => 'Bitte auswählen, wer das Geld erhält.',
+            'auszahlungsArt.required' => 'Bitte Barauszahlung oder Überweisung auswählen.',
         ];
     }
 
@@ -469,6 +535,8 @@ class ErstellenNachtraeglich extends Component
             $this->uebernimm($kassenbon);
             $this->uebernommen = true;
         }
+
+        $this->stelleAuszahlungWiederHer($kassenbon);
     }
 
     private function kassenbonOderAbort(): Kassenbon
@@ -539,6 +607,93 @@ class ErstellenNachtraeglich extends Component
         }
     }
 
+    private function stelleAuszahlungWiederHer(Kassenbon $kassenbon): void
+    {
+        if ($kassenbon->auszahlungsart === null || $kassenbon->auszahlungsempfaenger === null) {
+            return;
+        }
+
+        $this->auszahlungsEmpfaenger = $kassenbon->auszahlungsempfaenger->value;
+        $this->auszahlungsArt = $kassenbon->auszahlungsart->value;
+        $this->auszahlungBestaetigt = true;
+
+        if (! filled($this->begruendung)) {
+            $this->begruendungAusVorlageSetzen();
+        }
+    }
+
+    private function begruendungAusVorlageSetzen(): void
+    {
+        $text = $this->auszahlungsBegruendung();
+        if (! filled($this->begruendung) || $this->begruendung === $this->begruendungVorlage) {
+            $this->begruendung = $text;
+        }
+
+        $this->begruendungVorlage = $text;
+    }
+
+    private function aktualisiereAuszahlungsBegruendung(): void
+    {
+        if (! $this->auszahlungBestaetigt || $this->auszahlungsEmpfaenger !== AuszahlungsEmpfaenger::Lieferant->value) {
+            return;
+        }
+
+        if ($this->begruendung !== $this->begruendungVorlage) {
+            return;
+        }
+
+        $this->begruendungAusVorlageSetzen();
+    }
+
+    private function auszahlungsBegruendung(): string
+    {
+        $empfaenger = AuszahlungsEmpfaenger::from((string) $this->auszahlungsEmpfaenger);
+        $art = Auszahlungsart::from((string) $this->auszahlungsArt);
+
+        if ($empfaenger === AuszahlungsEmpfaenger::Lieferant) {
+            return 'Auszahlung per Überweisung an Lieferanten '.$this->lieferantenNameFuerAuszahlung().'.';
+        }
+
+        $name = $this->mitarbeiterName();
+
+        return $art === Auszahlungsart::Barauszahlung
+            ? 'Auszahlung per Barauszahlung an '.$name.'.'
+            : 'Auszahlung per Überweisung auf das Konto von '.$name.'.';
+    }
+
+    private function mitarbeiterName(): string
+    {
+        $user = Auth::user();
+        $name = trim(((string) ($user?->vorname ?? '')).' '.((string) ($user?->nachname ?? '')));
+
+        return $name !== '' ? $name : trim((string) ($user?->username ?? ''));
+    }
+
+    private function lieferantenNameFuerAuszahlung(): string
+    {
+        if (filled($this->lieferantenname)) {
+            return (string) $this->lieferantenname;
+        }
+
+        if (filled($this->erkannterLieferantenname)) {
+            return (string) $this->erkannterLieferantenname;
+        }
+
+        return 'den Lieferanten';
+    }
+
+    private function speichereAuszahlung(): void
+    {
+        if ($this->kassenbonId === null) {
+            return;
+        }
+
+        Kassenbon::query()->whereKey($this->kassenbonId)->update([
+            'auszahlungsempfaenger' => $this->auszahlungsEmpfaenger,
+            'auszahlungsart' => $this->auszahlungsArt,
+        ]);
+    }
+
     private function setzeWennErkannt(string $feld, mixed $wert): void
     {
         if ($wert === null || $wert === '') {
@@ -599,6 +754,8 @@ class ErstellenNachtraeglich extends Component
             kontierung: $this->normalizeKontierung(),
             positionen: $this->positionen,
             lieferanschriftUserId: Auth::id(),
+            auszahlungsEmpfaenger: $this->auszahlungsEmpfaenger,
+            auszahlungsArt: $this->auszahlungsArt,
         );
     }
 

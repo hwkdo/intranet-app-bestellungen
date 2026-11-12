@@ -72,6 +72,8 @@ class NachtraeglicheBestellungService
                 'steuerbetrag' => $eingabe->steuer,
                 'bruttobetrag' => $eingabe->brutto,
                 'zahlungsart' => $eingabe->zahlungsart,
+                'auszahlungsempfaenger' => $eingabe->auszahlungsEmpfaenger,
+                'auszahlungsart' => $eingabe->auszahlungsArt,
             ])->save();
 
             if (filled($bestellung->lieferantennummer)) {
