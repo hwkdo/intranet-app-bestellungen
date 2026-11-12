@@ -20,6 +20,7 @@ use Hwkdo\IntranetAppBestellungen\Notifications\BestellungZurBestellungNotificat
 use Hwkdo\IntranetAppBestellungen\Notifications\BestellungZurFreigabeNotification;
 use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
 use Hwkdo\IntranetAppBestellungen\Services\D3\BestellscheinD3Service;
+use Hwkdo\IntranetAppBestellungen\Services\D3\KassenbonRechnungD3Service;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -30,6 +31,7 @@ class BestellungWorkflow
         private readonly AngebotsregelService $angebotsregeln,
         private readonly BestellscheinD3Service $bestellscheinD3Service,
         private readonly AngebotD3Service $angebotD3Service,
+        private readonly KassenbonRechnungD3Service $kassenbonRechnungD3Service,
     ) {}
 
     public function einreichen(Bestellung $bestellung, User $user, ?int $freigeberId = null): Bestellung
@@ -206,6 +208,55 @@ class BestellungWorkflow
 
             return $bestellung->refresh();
         });
+    }
+
+    /**
+     * Schließt eine nachträgliche Bestellung ohne Freigabe ab und überträgt BESTS und ZAHLB.
+     * Bereits übertragene Dokumente werden bei einem erneuten Versuch ausgelassen.
+     */
+    public function nachtraeglichAbschliessen(Bestellung $bestellung, User $user): Bestellung
+    {
+        if (! $bestellung->istNachtraeglich()) {
+            throw new WorkflowException('Nur nachträgliche Bestellungen können so abgeschlossen werden.');
+        }
+
+        $this->ensureStatus($bestellung, [BestellungStatus::Entwurf]);
+
+        $bestellung->loadMissing('kassenbon');
+        $kassenbon = $bestellung->kassenbon;
+        if ($kassenbon === null) {
+            throw new WorkflowException('Zur nachträglichen Bestellung fehlt der Kassenbon.');
+        }
+
+        try {
+            if (! filled($bestellung->d3id)) {
+                $d3Id = $this->bestellscheinD3Service->push($bestellung, $user);
+                if (! $d3Id) {
+                    throw new WorkflowException('Die D3-Übertragung des Bestellscheins ist fehlgeschlagen. Die Bestellung bleibt im Entwurf.');
+                }
+            }
+
+            $rechnungId = $this->kassenbonRechnungD3Service->push($kassenbon->fresh() ?? $kassenbon, $user);
+            if (! $rechnungId) {
+                throw new WorkflowException('Die D3-Übertragung der Rechnung ist fehlgeschlagen. Die Bestellung bleibt im Entwurf.');
+            }
+        } catch (WorkflowException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            throw new WorkflowException('Die D3-Übertragung ist fehlgeschlagen. Die Bestellung bleibt im Entwurf: '.$e->getMessage());
+        }
+
+        $bestellung->besteller_id = $user->getKey();
+        $bestellung->bestellt_at = now();
+        $bestellung->save();
+
+        return $this->transition(
+            $bestellung,
+            $user,
+            BestellungStatus::Bestellt,
+            AktionTyp::Bestellt,
+            'Nachträgliche Bestellung abgeschlossen.',
+        );
     }
 
     public function logAktion(

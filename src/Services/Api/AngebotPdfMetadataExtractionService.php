@@ -11,6 +11,7 @@ use Hwkdo\IntranetAppBase\Data\AiRequestContext;
 use Hwkdo\IntranetAppBase\Enums\AiCapability;
 use Hwkdo\IntranetAppBestellungen\Ai\Agents\AngebotMetadataAgent;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
+use Hwkdo\IntranetAppBestellungen\Support\StructuredValueNormalizer;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
@@ -67,11 +68,11 @@ class AngebotPdfMetadataExtractionService
             throw new RuntimeException('KI-Antwort enthält keine strukturierten Angebotsdaten.');
         }
 
-        $supplierName = $this->nullableString($structured['supplier_name'] ?? null);
-        $referenceNumber = $this->nullableString($structured['reference_number'] ?? null);
-        $offerDate = $this->nullableDate($structured['offer_date'] ?? null);
-        $netAmount = $this->nullableFloat($structured['net_amount'] ?? null);
-        $amount = $this->nullableFloat($structured['amount'] ?? null);
+        $supplierName = StructuredValueNormalizer::nullableString($structured['supplier_name'] ?? null);
+        $referenceNumber = StructuredValueNormalizer::nullableString($structured['reference_number'] ?? null);
+        $offerDate = StructuredValueNormalizer::nullableDate($structured['offer_date'] ?? null);
+        $netAmount = StructuredValueNormalizer::nullableFloat($structured['net_amount'] ?? null);
+        $amount = StructuredValueNormalizer::nullableFloat($structured['amount'] ?? null);
         $config = $this->aiConfig->resolve('bestellungen', AiCapability::Agent);
 
         return [
@@ -105,49 +106,6 @@ class AngebotPdfMetadataExtractionService
         $normalized = trim(str_replace("\f", '', $text));
 
         return mb_strlen($normalized) >= 8;
-    }
-
-    private function nullableString(mixed $value): ?string
-    {
-        if (! is_string($value)) {
-            return null;
-        }
-
-        $trimmed = trim($value);
-
-        return $trimmed === '' ? null : $trimmed;
-    }
-
-    private function nullableFloat(mixed $value): ?float
-    {
-        if (is_int($value) || is_float($value)) {
-            return (float) $value;
-        }
-
-        if (is_string($value) && is_numeric(trim($value))) {
-            return (float) trim($value);
-        }
-
-        return null;
-    }
-
-    private function nullableDate(mixed $value): ?string
-    {
-        $raw = $this->nullableString(is_string($value) ? $value : null);
-        if ($raw === null) {
-            return null;
-        }
-
-        $normalized = str_replace('/', '.', $raw);
-
-        foreach (['Y-m-d', 'd.m.Y', 'd.m.y'] as $format) {
-            $parsed = \DateTimeImmutable::createFromFormat('!'.$format, $normalized);
-            if ($parsed instanceof \DateTimeImmutable && $parsed->format($format) === $normalized) {
-                return $parsed->format('Y-m-d');
-            }
-        }
-
-        return null;
     }
 
     private function calculateConfidence(

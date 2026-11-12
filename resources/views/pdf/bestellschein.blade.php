@@ -15,7 +15,8 @@
     $typ = $typ ?? 'intern';
     $istIntern = $typ === 'intern';
     $istExternMitPreisen = $typ === 'extern_mit_preise';
-    $zeigtPreise = $istIntern || $istExternMitPreisen;
+    $istNachtraeglich = $typ === 'nachtraeglich';
+    $zeigtPreise = $istIntern || $istExternMitPreisen || $istNachtraeglich;
 
     $besteller = $bestellung->besteller ?? $bestellung->user;
     $lieferanschriftUser = $bestellung->lieferanschriftUser ?? $besteller;
@@ -77,6 +78,22 @@
     </tr>
 </table>
 
+@if ($istNachtraeglich)
+    <div class="section">
+        <div class="section-title">Hinweis:</div>
+        Nachträgliche Bestellung – Beleg: Kassenbon
+        @if ($bestellung->kassenbon)
+            Nr. {{ $bestellung->kassenbon->belegnummer ?: '0' }}
+            @if ($bestellung->kassenbon->belegdatum)
+                vom {{ $bestellung->kassenbon->belegdatum->format('d.m.Y') }}
+            @endif
+            @if ($bestellung->kassenbon->bruttobetrag !== null)
+                · Brutto {{ number_format((float) $bestellung->kassenbon->bruttobetrag, 2, ',', '.') }} €
+            @endif
+        @endif
+    </div>
+@endif
+
 @if ($istIntern && ! empty($kontierung))
     <div class="section">
         <div class="section-title">Interne Bestellangaben</div>
@@ -103,7 +120,7 @@
     </div>
 @endif
 
-@if ($istIntern && filled($bestellung->begruendung))
+@if (($istIntern || $istNachtraeglich) && filled($bestellung->begruendung))
     <div class="section">
         <div class="section-title">Begründung:</div>
         {!! nl2br(e($bestellung->begruendung)) !!}
@@ -128,7 +145,7 @@
                 <th style="width: 15%">Art.-Nr.</th>
                 <th style="width: {{ $zeigtPreise ? '40%' : '57%' }}">Bezeichnung</th>
                 @if ($zeigtPreise)
-                    <th style="width: 17%" class="right">Einzelpreis<br><span class="small">(netto vor USt.)</span></th>
+                    <th style="width: 17%" class="right">Einzelpreis<br><span class="small">{{ $istNachtraeglich ? '(brutto)' : '(netto vor USt.)' }}</span></th>
                 @endif
                 <th style="width: 8%">BE-Art</th>
             </tr>

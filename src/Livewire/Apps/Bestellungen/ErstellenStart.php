@@ -27,6 +27,17 @@ class ErstellenStart extends Component
         return $this->formularUrl(BestellungTyp::Auftragsvergabe->value);
     }
 
+    public function nachtraeglichUrl(): string
+    {
+        $params = [];
+
+        if (request()->filled('projekt')) {
+            $params['projekt'] = request()->query('projekt');
+        }
+
+        return route('apps.bestellungen.erstellen.nachtraeglich', $params);
+    }
+
     private function formularUrl(string $typ): string
     {
         $params = ['typ' => $typ];

@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Laravel\Scout\Searchable;
 
@@ -239,6 +240,11 @@ class Bestellung extends Model
         return $this->hasMany(Auftragszeile::class)->orderBy('nr');
     }
 
+    public function kassenbon(): HasOne
+    {
+        return $this->hasOne(Kassenbon::class);
+    }
+
     public function notizen(): HasMany
     {
         return $this->hasMany(Notiz::class);
@@ -420,6 +426,11 @@ class Bestellung extends Model
     public function istAuftragsvergabe(): bool
     {
         return $this->typ === BestellungTyp::Auftragsvergabe;
+    }
+
+    public function istNachtraeglich(): bool
+    {
+        return $this->typ === BestellungTyp::Nachtraeglich;
     }
 
     public function benoetigtFinalenLieferantenVorD3(): bool

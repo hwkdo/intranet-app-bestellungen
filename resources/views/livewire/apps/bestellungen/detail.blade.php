@@ -55,7 +55,7 @@
                             <flux:button size="sm" variant="primary" icon="paper-airplane" wire:click="einreichenModalOeffnen">
                                 Zur Freigabe einreichen
                             </flux:button>
-                        @elseif ($bestellung->status === \Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus::Entwurf && $bestellung->user_id === auth()->id())
+                        @elseif (! $bestellung->istNachtraeglich() && $bestellung->status === \Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus::Entwurf && $bestellung->user_id === auth()->id())
                             <flux:tooltip :content="$this->einreichenGesperrtHinweis()">
                                 <flux:button size="sm" variant="primary" icon="paper-airplane" disabled>
                                     Zur Freigabe einreichen
@@ -86,6 +86,31 @@
                         @endif
                     </div>
                 </div>
+
+                @if ($bestellung->kassenbon)
+                    <flux:card class="mb-4 space-y-3">
+                        <flux:heading size="lg">Kassenbon</flux:heading>
+                        <flux:text>
+                            Beleg {{ $bestellung->kassenbon->belegnummer ?: '0' }}
+                            @if ($bestellung->kassenbon->belegdatum)
+                                vom {{ $bestellung->kassenbon->belegdatum->format('d.m.Y') }}
+                            @endif
+                            @if ($bestellung->kassenbon->bruttobetrag !== null)
+                                · {{ number_format((float) $bestellung->kassenbon->bruttobetrag, 2, ',', '.') }} €
+                            @endif
+                        </flux:text>
+                        <div class="flex flex-wrap gap-2">
+                            <flux:button size="sm" variant="ghost" icon="document" :href="route('apps.bestellungen.kassenbon.datei', $bestellung->kassenbon)" target="_blank">
+                                Beleg öffnen
+                            </flux:button>
+                            @if ($bestellung->status === \Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus::Entwurf)
+                                <flux:button size="sm" variant="primary" icon="arrow-path" wire:click="kassenbonD3Erneut">
+                                    D3-Übertragung erneut versuchen
+                                </flux:button>
+                            @endif
+                        </div>
+                    </flux:card>
+                @endif
 
                 <button
                     type="button"

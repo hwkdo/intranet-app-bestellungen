@@ -8,7 +8,7 @@
                 Die Auswahl legt fest, welche Felder im Formular erscheinen. Sie können die Art später nicht mehr wechseln.
             </flux:text>
 
-            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="grid gap-4 sm:grid-cols-2">
                 <a
                     href="{{ $this->internUrl() }}"
                     wire:navigate
@@ -54,7 +54,7 @@
                 <a
                     href="{{ $this->auftragsvergabeUrl() }}"
                     wire:navigate
-                    class="group block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 sm:col-span-2 lg:col-span-1"
+                    class="group block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
                 >
                     <flux:card class="h-full text-zinc-800 dark:text-slate-100 transition group-hover:ring-2 group-hover:ring-amber-500/60 dark:group-hover:ring-amber-400/50">
                         <div class="flex flex-col gap-3 p-1">
@@ -67,6 +67,27 @@
                             </flux:text>
                             <flux:button variant="primary" icon="arrow-right" class="mt-auto w-full pointer-events-none">
                                 Auftragsvergabe starten
+                            </flux:button>
+                        </div>
+                    </flux:card>
+                </a>
+
+                <a
+                    href="{{ $this->nachtraeglichUrl() }}"
+                    wire:navigate
+                    class="group block rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                >
+                    <flux:card class="h-full text-zinc-800 dark:text-slate-100 transition group-hover:ring-2 group-hover:ring-rose-500/60 dark:group-hover:ring-rose-400/50">
+                        <div class="flex flex-col gap-3 p-1">
+                            <div class="flex items-center gap-3">
+                                <flux:icon name="receipt-percent" class="size-8 text-rose-600 dark:text-rose-400" />
+                                <flux:heading size="lg" class="text-zinc-900 dark:text-white">Nachträgliche Bestellung</flux:heading>
+                            </div>
+                            <flux:text class="text-zinc-600 dark:text-white/70">
+                                Nur für dringende Ausnahmefälle, zum Beispiel ein Ersatzteil aus dem Baumarkt. Statt eines Bestellformulars laden Sie den Kassenbon hoch. Es gibt keine Freigabe. Bestellschein und Rechnung entstehen danach automatisch in D3.
+                            </flux:text>
+                            <flux:button variant="primary" icon="arrow-right" class="mt-auto w-full pointer-events-none">
+                                Kassenbon hochladen
                             </flux:button>
                         </div>
                     </flux:card>

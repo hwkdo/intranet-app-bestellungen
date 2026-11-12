@@ -21,4 +21,11 @@ it('liefert die Bestellschein-PDF-Varianten passend zum Bestelltyp', function ()
         ->and(BestellungTyp::Auftragsvergabe->label())->toBe('Auftragsvergabe mit Angebotsbezug')
         ->and(BestellungTyp::Auftragsvergabe->istAuftragsvergabe())->toBeTrue()
         ->and(BestellungTyp::Auftragsvergabe->bestellscheinLabel())->toBe('Auftrag (zum Unterschreiben)');
+
+    $nachtraeglich = BestellungTyp::bestellscheinVariantenFuer(BestellungTyp::Nachtraeglich);
+
+    expect($nachtraeglich)->toBe([BestellungTyp::Nachtraeglich])
+        ->and(BestellungTyp::Nachtraeglich->label())->toBe('Nachträgliche Bestellung')
+        ->and(BestellungTyp::Nachtraeglich->istNachtraeglich())->toBeTrue()
+        ->and(BestellungTyp::Nachtraeglich->bestellscheinLabel())->toBe('Nachträgliche Bestellung (mit Preisen)');
 });

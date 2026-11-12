@@ -32,7 +32,11 @@ class BestellscheinD3Service
     {
         $bestellung->loadMissing(['positionen', 'auftragszeilen', 'user', 'notizen', 'projekt']);
 
-        $pdfTyp = $bestellung->istAuftragsvergabe() ? BestellungTyp::Auftragsvergabe : BestellungTyp::Intern;
+        $pdfTyp = match (true) {
+            $bestellung->istAuftragsvergabe() => BestellungTyp::Auftragsvergabe,
+            $bestellung->istNachtraeglich() => BestellungTyp::Nachtraeglich,
+            default => BestellungTyp::Intern,
+        };
         $pdfPath = $this->pdfService->buildFile($bestellung, $pdfTyp);
 
         $dokumentData = [

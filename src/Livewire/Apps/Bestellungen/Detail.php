@@ -222,9 +222,33 @@ class Detail extends Component
 
     public function kannBestellen(): bool
     {
+        if ($this->bestellung->istNachtraeglich()) {
+            return false;
+        }
+
         $user = Auth::user();
 
         return $user !== null && $this->bestellung->darfVonUserBestelltAbschliessen($user);
+    }
+
+    public function kassenbonD3Erneut(): void
+    {
+        $user = Auth::user();
+        if ($user === null || ! $this->bestellung->istNachtraeglich() || $this->bestellung->status !== BestellungStatus::Entwurf) {
+            return;
+        }
+
+        if ((int) $this->bestellung->user_id !== (int) $user->getKey() && ! $user->can('manage-app-bestellungen')) {
+            return;
+        }
+
+        try {
+            app(BestellungWorkflow::class)->nachtraeglichAbschliessen($this->bestellung, $user);
+            $this->bestellung->refresh();
+            Flux::toast(text: 'Bestellschein und Rechnung wurden an D3 übertragen.', variant: 'success');
+        } catch (WorkflowException $e) {
+            Flux::toast(heading: 'D3-Übertragung', text: $e->getMessage(), variant: 'error');
+        }
     }
 
     #[Computed]
@@ -337,6 +361,10 @@ class Detail extends Component
 
     public function kannEinreichen(): bool
     {
+        if ($this->bestellung->istNachtraeglich()) {
+            return false;
+        }
+
         if ($this->bestellung->user_id !== Auth::id() || $this->bestellung->status !== BestellungStatus::Entwurf) {
             return false;
         }
@@ -1016,6 +1044,8 @@ class Detail extends Component
     {
         $this->bestellung->unsetRelation('angebote');
         $this->bestellung->load(['angebote.user', 'angebote.auftragszeile']);
+
+        $this->bestellung->loadMissing('kassenbon');
 
         return view('intranet-app-bestellungen::livewire.apps.bestellungen.detail');
     }

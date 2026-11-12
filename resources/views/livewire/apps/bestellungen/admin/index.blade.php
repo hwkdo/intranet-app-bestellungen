@@ -59,6 +59,10 @@
 
             <flux:tab.panel name="ki">
                 <div class="min-h-[400px] space-y-4">
+                    <flux:callout icon="information-circle" variant="secondary">
+                        Kassenbon-Fotos (JPG, PNG, WebP) lesen nur die Document-Parse-Motoren Vision und LlamaParse. Pdf-to-Text und HwkAdmin verarbeiten ausschließlich PDF.
+                    </flux:callout>
+
                     @livewire('intranet-app-base::document-parse-settings', [
                         'appIdentifier' => 'bestellungen',
                         'settingsModelClass' => \Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings::class,

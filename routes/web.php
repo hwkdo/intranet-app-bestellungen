@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use Hwkdo\IntranetAppBestellungen\Http\Controllers\AngebotPdfController;
+use Hwkdo\IntranetAppBestellungen\Http\Controllers\KassenbonDateiController;
 use Hwkdo\IntranetAppBestellungen\Http\Controllers\PdfController;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Detail;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Erstellen;
+use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\ErstellenNachtraeglich;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\ErstellenStart;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Freigaben;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Index;
@@ -22,6 +24,13 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])->group(function (
 
     Route::get('apps/bestellungen/erstellen', ErstellenStart::class)
         ->name('apps.bestellungen.erstellen');
+
+    Route::get('apps/bestellungen/erstellen/nachtraeglich/{beleg?}', ErstellenNachtraeglich::class)
+        ->whereNumber('beleg')
+        ->name('apps.bestellungen.erstellen.nachtraeglich');
+
+    Route::get('apps/bestellungen/kassenbons/{kassenbon}/datei', [KassenbonDateiController::class, 'show'])
+        ->name('apps.bestellungen.kassenbon.datei');
 
     Route::get('apps/bestellungen/erstellen/{typ}', Erstellen::class)
         ->whereIn('typ', ['intern', 'extern', 'auftragsvergabe'])
@@ -64,11 +73,11 @@ Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])
             ->name('apps.bestellungen.detail');
 
         Route::get('apps/bestellungen/{bestellung}/pdf/{typ}/inline', [PdfController::class, 'inline'])
-            ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise', 'auftragsvergabe'])
+            ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise', 'auftragsvergabe', 'nachtraeglich'])
             ->name('apps.bestellungen.pdf.inline');
 
         Route::get('apps/bestellungen/{bestellung}/pdf/{typ}/download', [PdfController::class, 'download'])
-            ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise', 'auftragsvergabe'])
+            ->whereIn('typ', ['intern', 'extern', 'extern_mit_preise', 'auftragsvergabe', 'nachtraeglich'])
             ->name('apps.bestellungen.pdf.download');
 
         Route::get('apps/bestellungen/{bestellung}/angebote/{angebot}/pdf/inline', [AngebotPdfController::class, 'inline'])

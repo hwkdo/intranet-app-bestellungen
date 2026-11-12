@@ -11,12 +11,11 @@ use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
-use Hwkdo\IntranetAppBestellungen\Http\Requests\MeldeFehlendenLieferantRequest;
+use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Concerns\MeldetFehlendenLieferant;
 use Hwkdo\IntranetAppBestellungen\Models\Art;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
 use Hwkdo\IntranetAppBestellungen\Models\KostenstelleCache;
-use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantNutzung;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
 use Hwkdo\IntranetAppBestellungen\Models\Projekt;
@@ -24,7 +23,6 @@ use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\InterneBestellerService;
-use Hwkdo\IntranetAppBestellungen\Services\Lieferant\FehlenderLieferantMeldungService;
 use Hwkdo\IntranetAppBestellungen\Services\Lieferant\LieferantSuggestionsService;
 use Hwkdo\IntranetAppBestellungen\Services\Stammdaten\StammdatenSyncService;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
@@ -44,6 +42,7 @@ use Livewire\WithFileUploads;
 #[Title('Bestellungen – Neue Bestellung')]
 class Erstellen extends Component
 {
+    use MeldetFehlendenLieferant;
     use WithFileUploads;
 
     public string $typ;
@@ -504,83 +503,6 @@ class Erstellen extends Component
         }
 
         $this->fillLieferantennameFromCache($nummer);
-    }
-
-    public function meldeFehlendenLieferant(): void
-    {
-        $this->validate(
-            MeldeFehlendenLieferantRequest::livewireValidationRules(),
-            MeldeFehlendenLieferantRequest::validationMessages(),
-            MeldeFehlendenLieferantRequest::validationAttributes(),
-        );
-
-        try {
-            app(FehlenderLieferantMeldungService::class)->send(
-                Auth::user(),
-                $this->fehlenderLieferantName,
-                $this->fehlenderLieferantAdresse ?: null,
-                $this->fehlenderLieferantIban ?: null,
-                $this->fehlenderLieferantWebseite ?: null,
-            );
-        } catch (\Throwable $e) {
-            Flux::toast(
-                heading: 'Fehler',
-                text: $e->getMessage(),
-                variant: 'error',
-            );
-
-            return;
-        }
-
-        $this->wendeUnbekanntenLieferantenAn();
-        $this->resetFehlenderLieferantModal();
-        Flux::modal('fehlender-lieferant')->close();
-        Flux::toast(
-            text: 'Fehlender Lieferant erfolgreich gemeldet',
-            variant: 'success',
-        );
-    }
-
-    private function wendeUnbekanntenLieferantenAn(): void
-    {
-        $nummer = IntranetAppBestellungenSettings::resolvedAppSettings()->unbekannterLieferantennummer;
-        $this->lieferantennummer = $nummer;
-
-        $lieferant = LieferantCache::query()->where('lieferantennummer', $nummer)->first();
-
-        if ($lieferant) {
-            $this->lieferantenname = $lieferant->lieferantenname;
-
-            return;
-        }
-
-        Log::warning('Platzhalter-Lieferant nicht im Stammdaten-Cache', ['lieferantennummer' => $nummer]);
-        $this->lieferantenname = 'Unbekannter Lieferant';
-    }
-
-    private function resetFehlenderLieferantModal(): void
-    {
-        $this->fehlenderLieferantName = '';
-        $this->fehlenderLieferantAdresse = '';
-        $this->fehlenderLieferantIban = '';
-        $this->fehlenderLieferantWebseite = '';
-    }
-
-    private function fillLieferantennameFromCache(string $nummer): void
-    {
-        $lieferant = LieferantCache::query()->where('lieferantennummer', $nummer)->first();
-        if ($lieferant) {
-            $this->lieferantenname = $lieferant->lieferantenname;
-        }
-    }
-
-    private function ensureLieferantennameFromCache(): void
-    {
-        if (! filled($this->lieferantennummer) || filled($this->lieferantenname)) {
-            return;
-        }
-
-        $this->fillLieferantennameFromCache($this->lieferantennummer);
     }
 
     /**

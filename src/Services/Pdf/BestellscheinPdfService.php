@@ -21,7 +21,7 @@ class BestellscheinPdfService
 
     public function html(Bestellung $bestellung, BestellungTyp $typ = BestellungTyp::Intern): string
     {
-        $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'lieferanschriftUser', 'aktionen.user', 'auftragszeilen']);
+        $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'lieferanschriftUser', 'aktionen.user', 'auftragszeilen', 'kassenbon']);
 
         $view = $typ === BestellungTyp::Auftragsvergabe
             ? 'intranet-app-bestellungen::pdf.auftragsvergabe'

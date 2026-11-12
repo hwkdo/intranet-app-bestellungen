@@ -10,6 +10,7 @@ enum BestellungTyp: string
     case Extern = 'extern';
     case ExternMitPreise = 'extern_mit_preise';
     case Auftragsvergabe = 'auftragsvergabe';
+    case Nachtraeglich = 'nachtraeglich';
 
     public function isIntern(): bool
     {
@@ -21,6 +22,11 @@ enum BestellungTyp: string
         return $this === self::Auftragsvergabe;
     }
 
+    public function istNachtraeglich(): bool
+    {
+        return $this === self::Nachtraeglich;
+    }
+
     public function label(): string
     {
         return match ($this) {
@@ -28,6 +34,7 @@ enum BestellungTyp: string
             self::Extern => 'Externe Bestellung',
             self::ExternMitPreise => 'Externe Bestellung (mit Preisen)',
             self::Auftragsvergabe => 'Auftragsvergabe mit Angebotsbezug',
+            self::Nachtraeglich => 'Nachträgliche Bestellung',
         };
     }
 
@@ -38,6 +45,7 @@ enum BestellungTyp: string
             self::Extern => 'Zum Versenden (ohne Preise)',
             self::ExternMitPreise => 'Zum Versenden (mit Preise)',
             self::Auftragsvergabe => 'Auftrag (zum Unterschreiben)',
+            self::Nachtraeglich => 'Nachträgliche Bestellung (mit Preisen)',
         };
     }
 
@@ -50,6 +58,10 @@ enum BestellungTyp: string
     {
         if ($bestellungTyp->istAuftragsvergabe()) {
             return [self::Auftragsvergabe];
+        }
+
+        if ($bestellungTyp->istNachtraeglich()) {
+            return [self::Nachtraeglich];
         }
 
         return [

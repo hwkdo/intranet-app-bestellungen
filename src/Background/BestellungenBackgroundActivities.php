@@ -7,6 +7,7 @@ namespace Hwkdo\IntranetAppBestellungen\Background;
 use Hwkdo\IntranetAppBase\Data\BackgroundActivityDefinition;
 use Hwkdo\IntranetAppBestellungen\IntranetAppBestellungen;
 use Hwkdo\IntranetAppBestellungen\Jobs\ExtractAngebotMetadataJob;
+use Hwkdo\IntranetAppBestellungen\Jobs\ExtractKassenbonJob;
 use Hwkdo\IntranetAppBestellungen\Jobs\PushBestellscheinToD3Job;
 use Hwkdo\IntranetAppBestellungen\Mail\FehlenderLieferantGemeldetMail;
 
@@ -23,6 +24,7 @@ final class BestellungenBackgroundActivities
         return [
             BackgroundActivityDefinition::queued(key: 'bestellungen.push-d3', label: 'Bestellschein nach D3', appIdentifier: $id, appName: $name, job: PushBestellscheinToD3Job::class, sort: 10),
             BackgroundActivityDefinition::queued(key: 'bestellungen.angebot-metadata', label: 'Angebotsmetadaten', appIdentifier: $id, appName: $name, job: ExtractAngebotMetadataJob::class, sort: 20),
+            BackgroundActivityDefinition::queued(key: 'bestellungen.kassenbon-metadata', label: 'Kassenbon auswerten', appIdentifier: $id, appName: $name, job: ExtractKassenbonJob::class, sort: 25),
             BackgroundActivityDefinition::mail(key: 'bestellungen.mail-lieferant', label: 'Mail: fehlender Lieferant', appIdentifier: $id, appName: $name, mailable: FehlenderLieferantGemeldetMail::class, sort: 30),
         ];
     }

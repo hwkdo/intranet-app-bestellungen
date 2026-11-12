@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppBestellungen;
 
-use Hwkdo\IntranetAppBase\Interfaces\ProvidesBackgroundActivitiesInterface;
-use Hwkdo\IntranetAppBestellungen\Background\BestellungenBackgroundActivities;
 use Hwkdo\IntranetAppBase\Data\NotificationTypeDefinition;
 use Hwkdo\IntranetAppBase\Data\SearchActionDefinition;
 use Hwkdo\IntranetAppBase\Interfaces\DashboardWidgetProviderInterface;
 use Hwkdo\IntranetAppBase\Interfaces\IntranetAppInterface;
+use Hwkdo\IntranetAppBase\Interfaces\ProvidesBackgroundActivitiesInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesDashboardWidgetsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesNotificationsInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesSearchActionsInterface;
@@ -17,6 +16,7 @@ use Hwkdo\IntranetAppBase\Interfaces\ProvidesSearchInterface;
 use Hwkdo\IntranetAppBase\Interfaces\ProvidesTasksInterface;
 use Hwkdo\IntranetAppBase\Interfaces\SearchSourceInterface;
 use Hwkdo\IntranetAppBase\Interfaces\TaskProviderInterface;
+use Hwkdo\IntranetAppBestellungen\Background\BestellungenBackgroundActivities;
 use Hwkdo\IntranetAppBestellungen\Dashboard\BestellungenDashboardWidgetProvider;
 use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
 use Hwkdo\IntranetAppBestellungen\Search\BestellungenSearchSource;
@@ -157,6 +157,18 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesBackgroun
                 sort: 100,
             ),
             new SearchActionDefinition(
+                key: 'bestellungen.kassenbon',
+                title: 'Kassenbon erfassen',
+                keywords: ['kassenbon', 'nachträgliche bestellung', 'nachtraegliche bestellung', 'ersatzteil', 'baumarkt'],
+                routeName: 'apps.bestellungen.erstellen.nachtraeglich',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                icon: 'receipt-percent',
+                permission: 'see-app-bestellungen',
+                subtitle: self::app_name(),
+                sort: 105,
+            ),
+            new SearchActionDefinition(
                 key: 'bestellungen.search',
                 title: 'Bestellungen suchen',
                 keywords: ['bestellung suchen', 'bestellungen suchen', 'ben suchen', 'suche bestellung'],
@@ -185,6 +197,4 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesBackgroun
     {
         return BestellungenBackgroundActivities::definitions();
     }
-
-
 }

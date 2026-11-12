@@ -26,6 +26,7 @@ enum AktionTyp: string
     case AuftragszeileHinzugefuegt = 'auftragszeile_hinzugefuegt';
     case AuftragszeileGeaendert = 'auftragszeile_geaendert';
     case AuftragszeileEntfernt = 'auftragszeile_entfernt';
+    case NachtraeglichErfasst = 'nachtraeglich_erfasst';
 
     public function label(): string
     {
@@ -50,6 +51,7 @@ enum AktionTyp: string
             self::AuftragszeileHinzugefuegt => 'Auftragszeile hinzugefügt',
             self::AuftragszeileGeaendert => 'Auftragszeile geändert',
             self::AuftragszeileEntfernt => 'Auftragszeile entfernt',
+            self::NachtraeglichErfasst => 'Nachträgliche Bestellung erfasst',
         };
     }
 }

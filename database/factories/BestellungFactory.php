@@ -80,6 +80,17 @@ class BestellungFactory extends Factory
         ]);
     }
 
+    public function nachtraeglich(): self
+    {
+        return $this->state(fn (): array => [
+            'typ' => BestellungTyp::Nachtraeglich,
+            'interner_empfaenger_user_id' => null,
+            'lieferantennummer' => fake()->numerify('#####'),
+            'lieferantenname' => fake()->company(),
+            'status' => BestellungStatus::Entwurf,
+        ]);
+    }
+
     public function extern(): self
     {
         return $this->state(fn (): array => [
