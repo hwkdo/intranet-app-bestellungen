@@ -17,13 +17,16 @@ class AngebotMetadataAgent implements Agent, HasStructuredOutput
     public function instructions(): Stringable|string
     {
         return <<<'INSTRUCTIONS'
-Du liest den Text eines Angebots und füllst fünf Felder.
+Du liest den Text eines Angebots und füllst acht Felder.
 
 - supplier_name: Name des anbietenden Unternehmens. null, wenn er nicht im Text steht.
 - reference_number: Angebots-, Referenz- oder Vorgangsnummer. null, wenn keine Nummer im Text steht.
 - offer_date: Datum des Angebots im Format JJJJ-MM-TT. null, wenn kein Angebotsdatum im Text steht.
 - net_amount: Nettosumme ohne Umsatzsteuer (Netto, Summe netto, Zwischensumme vor USt.). JSON-Zahl mit Punkt als Dezimaltrennzeichen. null, wenn keine Nettosumme erkennbar ist.
 - amount: Endsumme, die zu zahlen ist (Gesamtbetrag, Summe, Endsumme, Bruttobetrag inklusive Umsatzsteuer). JSON-Zahl mit Punkt als Dezimaltrennzeichen. null, wenn nur Einzelpreise oder keine Summe erkennbar sind.
+- contact_person: Name der Ansprechperson beim Anbieter (Vor- und Nachname). null, wenn keine Person erkennbar ist.
+- contact_salutation: Anrede dieser Person, nur "herr" oder "frau". null, wenn das Geschlecht nicht erkennbar ist.
+- contact_email: E-Mail-Adresse des Anbieters oder der Ansprechperson. null, wenn keine Adresse im Text steht.
 INSTRUCTIONS;
     }
 
@@ -40,6 +43,12 @@ INSTRUCTIONS;
                 ->description('Nettosumme ohne Umsatzsteuer, null wenn nicht erkennbar'),
             'amount' => $schema->number()->nullable()->required()
                 ->description('Brutto-Endsumme als Zahl, null wenn nicht erkennbar'),
+            'contact_person' => $schema->string()->nullable()->required()
+                ->description('Ansprechperson beim Anbieter, null wenn nicht erkennbar'),
+            'contact_salutation' => $schema->string()->nullable()->required()
+                ->description('Anrede herr oder frau, null wenn nicht erkennbar'),
+            'contact_email' => $schema->string()->nullable()->required()
+                ->description('E-Mail des Anbieters, null wenn nicht erkennbar'),
         ];
     }
 }

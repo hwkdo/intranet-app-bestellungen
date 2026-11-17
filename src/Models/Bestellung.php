@@ -7,6 +7,7 @@ namespace Hwkdo\IntranetAppBestellungen\Models;
 use App\Models\User;
 use Hwkdo\IntranetAppBestellungen\Database\Factories\BestellungFactory;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
+use Hwkdo\IntranetAppBestellungen\Enums\AuftragModus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
@@ -31,6 +32,10 @@ class Bestellung extends Model
 
     protected $guarded = [];
 
+    protected $attributes = [
+        'auftrag_modus' => 'tabelle',
+    ];
+
     /**
      * Freigabe-relevante Aktionen, deren Akteur als „involviert“ gilt.
      *
@@ -51,6 +56,8 @@ class Bestellung extends Model
         return [
             'status' => BestellungStatus::class,
             'typ' => BestellungTyp::class,
+            'auftrag_modus' => AuftragModus::class,
+            'ausfuehrungsfrist' => 'date',
             'kontierung' => 'array',
             'gruppen' => 'array',
             'lieferanschrift' => 'array',
@@ -426,6 +433,11 @@ class Bestellung extends Model
     public function istAuftragsvergabe(): bool
     {
         return $this->typ === BestellungTyp::Auftragsvergabe;
+    }
+
+    public function nutztAuftragsvorlage(): bool
+    {
+        return $this->istAuftragsvergabe() && $this->auftrag_modus === AuftragModus::Vorlage;
     }
 
     public function istNachtraeglich(): bool

@@ -17,11 +17,19 @@ class BestellscheinPdfService
 {
     public function __construct(
         private readonly PdfService $pdfService,
+        private readonly AuftragsschreibenDaten $auftragsschreibenDaten,
     ) {}
 
     public function html(Bestellung $bestellung, BestellungTyp $typ = BestellungTyp::Intern): string
     {
         $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'lieferanschriftUser', 'aktionen.user', 'auftragszeilen', 'kassenbon']);
+
+        if ($typ === BestellungTyp::Auftragsvergabe && $bestellung->nutztAuftragsvorlage()) {
+            return View::make('intranet-app-bestellungen::pdf.auftragsschreiben', [
+                ...$this->sharedViewData($bestellung),
+                'schreiben' => $this->auftragsschreibenDaten->fuer($bestellung),
+            ])->render();
+        }
 
         $view = $typ === BestellungTyp::Auftragsvergabe
             ? 'intranet-app-bestellungen::pdf.auftragsvergabe'

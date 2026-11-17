@@ -47,5 +47,49 @@ it('mappt Angebotsdatum und Nettobetrag aus der KI-Antwort', function (): void {
         ->and($result['amount'])->toBe(1190.6)
         ->and($result['supplier_name'])->toBe('Muster GmbH')
         ->and($result['reference_number'])->toBe('A-100')
-        ->and($result['source'])->toBe('text');
+        ->and($result['source'])->toBe('text')
+        ->and($result['payload']['contact'])->toBe([
+            'person' => null,
+            'salutation' => null,
+            'email' => null,
+        ]);
+});
+
+it('legt Ansprechpartner, Anrede und E-Mail im Extraktions-Payload ab', function (): void {
+    Storage::fake('local');
+    Storage::disk('local')->put('bestellungen/angebote/2/angebot.pdf', '%PDF-1.4');
+
+    $pdf = Mockery::mock(PdfService::class);
+    $pdf->shouldReceive('pdfToText')->once()->andReturn('Angebot der Muster GmbH, Frau Lina Vogt, mailto:lina.vogt@example.test');
+
+    $gateway = Mockery::mock(IntranetAiGatewayInterface::class);
+    $gateway->shouldReceive('agent')->once()->andReturn([
+        'supplier_name' => 'Muster GmbH',
+        'reference_number' => 'A-200',
+        'offer_date' => '2026-11-02',
+        'net_amount' => 500,
+        'amount' => 595,
+        'contact_person' => 'Lina Vogt',
+        'contact_salutation' => 'Frau',
+        'contact_email' => 'mailto:lina.vogt@example.test',
+    ]);
+
+    $config = Mockery::mock(AiConfigResolverInterface::class);
+    $config->shouldReceive('resolve')->once()->andReturn(new ResolvedAiConfig(
+        provider: AiProvider::OpenAi,
+        model: 'gpt-test',
+        source: AiConfigSource::ConfigDefault,
+        capability: AiCapability::Agent,
+    ));
+
+    $result = (new AngebotPdfMetadataExtractionService($pdf, $gateway, $config))->extract(new Angebot([
+        'pdf_path' => 'bestellungen/angebote/2/angebot.pdf',
+        'user_id' => 5,
+    ]));
+
+    expect($result['payload']['contact'])->toBe([
+        'person' => 'Lina Vogt',
+        'salutation' => 'frau',
+        'email' => 'lina.vogt@example.test',
+    ]);
 });

@@ -21,6 +21,7 @@ use Hwkdo\IntranetAppBestellungen\Notifications\BestellungZurFreigabeNotificatio
 use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
 use Hwkdo\IntranetAppBestellungen\Services\D3\BestellscheinD3Service;
 use Hwkdo\IntranetAppBestellungen\Services\D3\KassenbonRechnungD3Service;
+use Hwkdo\IntranetAppBestellungen\Services\Pdf\AuftragsschreibenDaten;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -32,6 +33,7 @@ class BestellungWorkflow
         private readonly BestellscheinD3Service $bestellscheinD3Service,
         private readonly AngebotD3Service $angebotD3Service,
         private readonly KassenbonRechnungD3Service $kassenbonRechnungD3Service,
+        private readonly AuftragsschreibenDaten $auftragsschreibenDaten,
     ) {}
 
     public function einreichen(Bestellung $bestellung, User $user, ?int $freigeberId = null): Bestellung
@@ -301,6 +303,14 @@ class BestellungWorkflow
 
         if ($unvollstaendig) {
             throw new WorkflowException('Jede Auftragszeile braucht Angebotsdatum, Angebotsnummer und Nettobetrag.');
+        }
+
+        if ($bestellung->nutztAuftragsvorlage()) {
+            $fehlend = $this->auftragsschreibenDaten->fehlendeAngaben($bestellung);
+
+            if ($fehlend !== []) {
+                throw new WorkflowException('Für das Auftragsschreiben fehlen: '.implode(', ', $fehlend).'.');
+            }
         }
     }
 

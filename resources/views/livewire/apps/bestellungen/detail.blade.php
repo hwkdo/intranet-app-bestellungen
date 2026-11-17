@@ -1078,13 +1078,22 @@
                     <flux:error name="manuelleZeileNetto" />
                 </div>
                 <div>
-                    <flux:input type="number" step="0.01" min="0" wire:model="manuelleZeileBrutto" label="Brutto (€, optional)" />
+                    <flux:input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        wire:model="manuelleZeileBrutto"
+                        :label="$bestellung->nutztAuftragsvorlage() ? 'Brutto (€)' : 'Brutto (€, optional)'"
+                        :required="$bestellung->nutztAuftragsvorlage()"
+                    />
                     <flux:error name="manuelleZeileBrutto" />
                 </div>
-                <div class="md:col-span-2">
-                    <flux:textarea wire:model="manuelleZeileFreitext" label="Freitext" rows="3" />
-                    <flux:error name="manuelleZeileFreitext" />
-                </div>
+                @unless ($bestellung->nutztAuftragsvorlage())
+                    <div class="md:col-span-2">
+                        <flux:textarea wire:model="manuelleZeileFreitext" label="Freitext" rows="3" />
+                        <flux:error name="manuelleZeileFreitext" />
+                    </div>
+                @endunless
             </div>
 
             <div class="mt-6 flex justify-end gap-2">

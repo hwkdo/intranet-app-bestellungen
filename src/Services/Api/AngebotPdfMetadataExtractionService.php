@@ -73,6 +73,9 @@ class AngebotPdfMetadataExtractionService
         $offerDate = StructuredValueNormalizer::nullableDate($structured['offer_date'] ?? null);
         $netAmount = StructuredValueNormalizer::nullableFloat($structured['net_amount'] ?? null);
         $amount = StructuredValueNormalizer::nullableFloat($structured['amount'] ?? null);
+        $contactPerson = StructuredValueNormalizer::nullableString($structured['contact_person'] ?? null);
+        $contactSalutation = $this->nullableAnrede($structured['contact_salutation'] ?? null);
+        $contactEmail = $this->nullableEmail($structured['contact_email'] ?? null);
         $config = $this->aiConfig->resolve('bestellungen', AiCapability::Agent);
 
         return [
@@ -87,9 +90,46 @@ class AngebotPdfMetadataExtractionService
             'payload' => [
                 'text_excerpt' => mb_substr($text, 0, 1500),
                 'model' => $config->model,
+                'contact' => [
+                    'person' => $contactPerson,
+                    'salutation' => $contactSalutation,
+                    'email' => $contactEmail,
+                ],
             ],
             'confidence' => $this->calculateConfidence($supplierName, $referenceNumber, $offerDate, $netAmount, $amount),
         ];
+    }
+
+    private function nullableAnrede(mixed $value): ?string
+    {
+        $raw = StructuredValueNormalizer::nullableString($value);
+        if ($raw === null) {
+            return null;
+        }
+
+        $normalized = mb_strtolower($raw);
+
+        if (str_contains($normalized, 'frau')) {
+            return 'frau';
+        }
+
+        if (str_contains($normalized, 'herr') || in_array($normalized, ['hr', 'mr'], true)) {
+            return 'herr';
+        }
+
+        return null;
+    }
+
+    private function nullableEmail(mixed $value): ?string
+    {
+        $raw = StructuredValueNormalizer::nullableString($value);
+        if ($raw === null) {
+            return null;
+        }
+
+        $raw = preg_replace('/^mailto:/i', '', $raw) ?? $raw;
+
+        return filter_var($raw, FILTER_VALIDATE_EMAIL) !== false ? $raw : null;
     }
 
     private function embeddedText(string $absolutePdfPath): string

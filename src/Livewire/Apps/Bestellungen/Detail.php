@@ -10,6 +10,7 @@ use Hwkdo\D3RestLaravel\Client as D3Client;
 use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
 use Hwkdo\IntranetAppBestellungen\Data\AngebotsregelAuswertung;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
+use Hwkdo\IntranetAppBestellungen\Enums\AuftragModus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
@@ -29,6 +30,7 @@ use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\D3\AngebotD3Service;
 use Hwkdo\IntranetAppBestellungen\Services\Lieferant\FehlenderLieferantMeldungService;
 use Hwkdo\IntranetAppBestellungen\Services\Lieferant\LieferantSuggestionsService;
+use Hwkdo\IntranetAppBestellungen\Services\Pdf\AuftragsschreibenDaten;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
 use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Illuminate\Contracts\View\View;
@@ -135,6 +137,16 @@ class Detail extends Component
 
     public string $manuelleZeileLieferantSearch = '';
 
+    public string $auftragModus = 'tabelle';
+
+    public ?string $ausfuehrungsfrist = null;
+
+    public ?string $auftragnehmerAnrede = null;
+
+    public ?string $auftragnehmerAnsprechpartner = null;
+
+    public ?string $auftragnehmerEmail = null;
+
     public ?int $angebotAngabenId = null;
 
     public ?string $angebotAngabenLieferantennummer = null;
@@ -182,6 +194,7 @@ class Detail extends Component
         }
 
         $this->syncAuftragszeilenDraft();
+        $this->syncAuftragsschreiben();
 
         if ($this->aktionParam === 'freigeben' && $this->kannFreigeben()) {
             Flux::modal('freigeben-modal')->show();
@@ -377,13 +390,25 @@ class Detail extends Component
             return true;
         }
 
-        return $this->auftragszeilenVollstaendig() && filled($this->bestellung->lieferantenname);
+        if (! $this->auftragszeilenVollstaendig() || ! filled($this->bestellung->lieferantenname)) {
+            return false;
+        }
+
+        return ! $this->bestellung->nutztAuftragsvorlage() || $this->auftragsschreibenFehlendeAngaben() === [];
     }
 
     public function einreichenGesperrtHinweis(): string
     {
         if ($this->bestellung->istAuftragsvergabe() && (! $this->auftragszeilenVollstaendig() || ! filled($this->bestellung->lieferantenname))) {
             return 'Mindestens eine vollständige Auftragszeile erfassen. Der Anbieter des übernommenen Angebots wird der Auftragnehmer.';
+        }
+
+        if ($this->bestellung->nutztAuftragsvorlage()) {
+            $fehlend = $this->auftragsschreibenFehlendeAngaben();
+
+            if ($fehlend !== []) {
+                return 'Für das Auftragsschreiben fehlen: '.implode(', ', $fehlend).'.';
+            }
         }
 
         return 'Angebotsvoraussetzungen auf dem Reiter „Angebote / Begründung“ erfüllen';
@@ -776,6 +801,7 @@ class Detail extends Component
             $kopie->user_id = Auth::id();
             $kopie->freigeber_id = null;
             $kopie->besteller_id = null;
+            $kopie->ausfuehrungsfrist = null;
             $kopie->d3id = null;
             $kopie->d3_pushed_at = null;
             $kopie->bestellt_at = null;
@@ -1313,7 +1339,8 @@ class Detail extends Component
         Flux::toast(
             heading: $anzahl > 0 ? 'Auftragszeilen übernommen' : 'Keine Angebote übernommen',
             text: $anzahl > 0
-                ? $anzahl.' Angebot'.($anzahl === 1 ? '' : 'e').' als Auftragszeile übernommen. Freitext können Sie je Zeile ergänzen.'
+                ? $anzahl.' Angebot'.($anzahl === 1 ? '' : 'e').' als Auftragszeile übernommen.'
+                    .($this->bestellung->nutztAuftragsvorlage() ? '' : ' Freitext können Sie je Zeile ergänzen.')
                 : 'Die Auswahl enthält keine freien Angebote.',
             variant: $anzahl > 0 ? 'success' : 'warning',
         );
@@ -1329,7 +1356,7 @@ class Detail extends Component
             'manuelleZeileDatum' => ['required', 'date'],
             'manuelleZeileNummer' => ['required', 'string', 'max:100'],
             'manuelleZeileNetto' => ['required', 'numeric', 'min:0'],
-            'manuelleZeileBrutto' => ['nullable', 'numeric', 'min:0'],
+            'manuelleZeileBrutto' => ['nullable', 'numeric', 'min:0', Rule::requiredIf(fn (): bool => $this->bestellung->nutztAuftragsvorlage())],
             'manuelleZeileFreitext' => ['nullable', 'string'],
             'manuelleZeileLieferantennummer' => [
                 Rule::requiredIf(fn (): bool => ! filled($this->bestellung->lieferantenname)),
@@ -1379,7 +1406,7 @@ class Detail extends Component
             'auftragszeilenDraft.'.$idx.'.angebotsdatum' => ['required', 'date'],
             'auftragszeilenDraft.'.$idx.'.angebotsnummer' => ['required', 'string', 'max:100'],
             'auftragszeilenDraft.'.$idx.'.betrag_netto' => ['required', 'numeric', 'min:0'],
-            'auftragszeilenDraft.'.$idx.'.betrag_brutto' => ['nullable', 'numeric', 'min:0'],
+            'auftragszeilenDraft.'.$idx.'.betrag_brutto' => ['nullable', 'numeric', 'min:0', Rule::requiredIf(fn (): bool => $this->bestellung->nutztAuftragsvorlage())],
             'auftragszeilenDraft.'.$idx.'.freitext' => ['nullable', 'string'],
         ]);
 
@@ -1440,6 +1467,117 @@ class Detail extends Component
         $this->syncAuftragszeilenDraft();
     }
 
+    public function updatedAuftragModus(): void
+    {
+        $this->auftragModusGeaendert();
+    }
+
+    public function auftragModusGeaendert(): void
+    {
+        if (! $this->kannAuftragszeilenBearbeiten()) {
+            $this->syncAuftragsschreiben();
+
+            return;
+        }
+
+        $modus = AuftragModus::tryFrom($this->auftragModus) ?? AuftragModus::Tabelle;
+
+        if ($this->auftragModus !== $modus->value) {
+            $this->auftragModus = $modus->value;
+        }
+
+        $felder = [
+            'auftrag_modus' => $modus,
+        ];
+
+        if (
+            $modus === AuftragModus::Vorlage
+            && ! filled($this->bestellung->auftragnehmer_anrede)
+            && ! filled($this->bestellung->auftragnehmer_ansprechpartner)
+            && ! filled($this->bestellung->auftragnehmer_email)
+        ) {
+            $vorbelegung = app(AuftragsschreibenDaten::class)->vorbelegungAusAngeboten($this->bestellung);
+            $felder['auftragnehmer_anrede'] = $vorbelegung['anrede'];
+            $felder['auftragnehmer_ansprechpartner'] = $vorbelegung['ansprechpartner'];
+            $felder['auftragnehmer_email'] = $vorbelegung['email'];
+        }
+
+        $this->bestellung->forceFill($felder)->save();
+
+        app(BestellungWorkflow::class)->logAktion(
+            $this->bestellung,
+            Auth::user(),
+            AktionTyp::AuftragszeileGeaendert,
+            $modus === AuftragModus::Vorlage
+                ? 'Auftragsschein wird aus der Vorlage erzeugt.'
+                : 'Auftragsschein verwendet Freitext je Zeile.',
+        );
+
+        $this->refreshBestellung();
+        $this->syncAuftragsschreiben();
+    }
+
+    public function auftragsschreibenSpeichern(): void
+    {
+        if (! $this->kannAuftragszeilenBearbeiten()) {
+            return;
+        }
+
+        $this->auftragnehmerAnrede = $this->auftragnehmerAnrede === '' ? null : $this->auftragnehmerAnrede;
+
+        $this->validate([
+            'ausfuehrungsfrist' => ['required', 'date'],
+            'auftragnehmerAnrede' => ['nullable', Rule::in(['herr', 'frau'])],
+            'auftragnehmerAnsprechpartner' => ['nullable', 'string', 'max:255'],
+            'auftragnehmerEmail' => ['nullable', 'email', 'max:255'],
+        ]);
+
+        $this->bestellung->forceFill([
+            'ausfuehrungsfrist' => $this->ausfuehrungsfrist,
+            'auftragnehmer_anrede' => $this->auftragnehmerAnrede,
+            'auftragnehmer_ansprechpartner' => $this->nullableText($this->auftragnehmerAnsprechpartner),
+            'auftragnehmer_email' => $this->nullableText($this->auftragnehmerEmail),
+        ])->save();
+
+        app(BestellungWorkflow::class)->logAktion(
+            $this->bestellung,
+            Auth::user(),
+            AktionTyp::AuftragszeileGeaendert,
+            'Auftragsschreiben aktualisiert.',
+            payload: ['ausfuehrungsfrist' => $this->ausfuehrungsfrist],
+        );
+
+        $this->refreshBestellung();
+        $this->syncAuftragsschreiben();
+
+        Flux::toast(heading: 'Auftragsschreiben gespeichert', text: 'Frist und Ansprechpartner wurden übernommen.', variant: 'success');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function auftragsschreibenFehlendeAngaben(): array
+    {
+        if (! $this->bestellung->nutztAuftragsvorlage()) {
+            return [];
+        }
+
+        return app(AuftragsschreibenDaten::class)->fehlendeAngaben($this->bestellung);
+    }
+
+    public function auftragnehmerAusAngebotErkannt(): bool
+    {
+        $vorbelegung = app(AuftragsschreibenDaten::class)->vorbelegungAusAngeboten($this->bestellung);
+
+        if ($vorbelegung['anrede'] === null && $vorbelegung['ansprechpartner'] === null && $vorbelegung['email'] === null) {
+            return false;
+        }
+
+        return $this->auftragnehmerAnrede === $vorbelegung['anrede']
+            && $this->auftragnehmerAnsprechpartner === $vorbelegung['ansprechpartner']
+            && $this->auftragnehmerEmail === $vorbelegung['email'];
+    }
+
     private function kannAuftragszeilenBearbeiten(): bool
     {
         return $this->bestellung->istAuftragsvergabe() && $this->kannBearbeiten();
@@ -1475,6 +1613,28 @@ class Detail extends Component
             ])
             ->values()
             ->all();
+    }
+
+    private function syncAuftragsschreiben(): void
+    {
+        $modus = $this->bestellung->auftrag_modus;
+
+        $this->auftragModus = $modus instanceof AuftragModus ? $modus->value : AuftragModus::Tabelle->value;
+        $this->ausfuehrungsfrist = $this->bestellung->ausfuehrungsfrist?->toDateString();
+        $this->auftragnehmerAnrede = $this->bestellung->auftragnehmer_anrede;
+        $this->auftragnehmerAnsprechpartner = $this->bestellung->auftragnehmer_ansprechpartner;
+        $this->auftragnehmerEmail = $this->bestellung->auftragnehmer_email;
+    }
+
+    private function nullableText(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 
     private function angebotFuerAngaben(int $angebotId): ?Angebot
