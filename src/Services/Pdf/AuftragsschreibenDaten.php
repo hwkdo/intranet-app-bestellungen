@@ -39,20 +39,26 @@ class AuftragsschreibenDaten
      */
     public function fuer(Bestellung $bestellung): array
     {
-        $bestellung->loadMissing(['auftragszeilen.angebot', 'angebote', 'besteller', 'user']);
+        $bestellung->loadMissing(['auftragszeilen.angebot', 'besteller', 'user']);
 
         $positionen = $this->positionen($bestellung);
         $lieferant = $this->lieferant($bestellung);
         $kontakt = $this->vorbelegungAusAngeboten($bestellung);
-        $anrede = $this->normalisierteAnrede($bestellung->auftragnehmer_anrede) ?? $kontakt['anrede'];
-        $ansprechpartner = $this->text($bestellung->auftragnehmer_ansprechpartner) ?? $kontakt['ansprechpartner'];
+        $anrede = $bestellung->auftragnehmer_anrede === null
+            ? $kontakt['anrede']
+            : $this->normalisierteAnrede($bestellung->auftragnehmer_anrede);
+        $ansprechpartner = $bestellung->auftragnehmer_ansprechpartner === null
+            ? $kontakt['ansprechpartner']
+            : $this->text($bestellung->auftragnehmer_ansprechpartner);
         $person = $bestellung->besteller ?? $bestellung->user;
         $brutto = $this->bruttoSumme($positionen);
         $mehrere = $positionen->count() > 1;
 
         return [
             'empfaengerZeilen' => $this->empfaengerZeilen($lieferant, $anrede, $ansprechpartner),
-            'auftragnehmerEmail' => $this->text($bestellung->auftragnehmer_email) ?? $kontakt['email'],
+            'auftragnehmerEmail' => $bestellung->auftragnehmer_email === null
+                ? $kontakt['email']
+                : $this->text($bestellung->auftragnehmer_email),
             'datum' => ($bestellung->bestellt_at ?? now())->locale('de')->translatedFormat('j. F Y'),
             'bezug' => $this->bezugszeile($positionen),
             'betreff' => $this->text($bestellung->betreff) ?? '',
@@ -78,7 +84,7 @@ class AuftragsschreibenDaten
      */
     public function vorbelegungAusAngeboten(Bestellung $bestellung): array
     {
-        $bestellung->loadMissing(['auftragszeilen.angebot', 'angebote']);
+        $bestellung->loadMissing('auftragszeilen.angebot');
 
         $leer = [
             'anrede' => null,
@@ -88,12 +94,7 @@ class AuftragsschreibenDaten
 
         $angebote = $bestellung->auftragszeilen
             ->map(fn (Auftragszeile $zeile): ?Angebot => $zeile->angebot)
-            ->filter(fn (?Angebot $angebot): bool => $angebot instanceof Angebot)
-            ->values();
-
-        if ($angebote->isEmpty()) {
-            $angebote = $this->vergleichsangebote($bestellung);
-        }
+            ->filter(fn (?Angebot $angebot): bool => $angebot instanceof Angebot);
 
         foreach ($angebote as $angebot) {
             $contact = $angebot->extraction_payload['contact'] ?? null;
@@ -124,7 +125,7 @@ class AuftragsschreibenDaten
      */
     public function fehlendeAngaben(Bestellung $bestellung): array
     {
-        $bestellung->loadMissing(['auftragszeilen.angebot', 'angebote']);
+        $bestellung->loadMissing('auftragszeilen.angebot');
 
         $fehlend = [];
 
@@ -184,47 +185,24 @@ class AuftragsschreibenDaten
     }
 
     /**
-     * Auftragszeilen, ersatzweise die hochgeladenen Angebote, solange noch keine Zeile übernommen wurde.
+     * Nur übernommene Auftragszeilen. Der Bruttobetrag kommt aus der Zeile oder aus dem verknüpften Angebot.
      *
      * @return Collection<int, array{nummer: ?string, datum: ?Carbon, brutto: ?float}>
      */
     private function positionen(Bestellung $bestellung): Collection
     {
-        $bestellung->loadMissing(['auftragszeilen.angebot', 'angebote']);
+        $bestellung->loadMissing('auftragszeilen.angebot');
 
-        if ($bestellung->auftragszeilen->isNotEmpty()) {
-            return $bestellung->auftragszeilen
-                ->map(function (Auftragszeile $zeile): array {
-                    $brutto = $zeile->betrag_brutto ?? $zeile->angebot?->betrag;
+        return $bestellung->auftragszeilen
+            ->map(function (Auftragszeile $zeile): array {
+                $brutto = $zeile->betrag_brutto ?? $zeile->angebot?->betrag;
 
-                    return [
-                        'nummer' => $this->text($zeile->angebotsnummer) ?? $this->text($zeile->angebot?->nummer),
-                        'datum' => $zeile->angebotsdatum ?? $zeile->angebot?->angebotsdatum,
-                        'brutto' => $brutto === null ? null : (float) $brutto,
-                    ];
-                })
-                ->values();
-        }
-
-        return $this->vergleichsangebote($bestellung)
-            ->map(fn (Angebot $angebot): array => [
-                'nummer' => $this->text($angebot->nummer),
-                'datum' => $angebot->angebotsdatum,
-                'brutto' => $angebot->betrag === null ? null : (float) $angebot->betrag,
-            ])
-            ->values();
-    }
-
-    /**
-     * @return Collection<int, Angebot>
-     */
-    private function vergleichsangebote(Bestellung $bestellung): Collection
-    {
-        $bestellung->loadMissing('angebote');
-
-        return $bestellung->angebote
-            ->where('typ', 'angebot')
-            ->sortBy('id')
+                return [
+                    'nummer' => $this->text($zeile->angebotsnummer) ?? $this->text($zeile->angebot?->nummer),
+                    'datum' => $zeile->angebotsdatum ?? $zeile->angebot?->angebotsdatum,
+                    'brutto' => $brutto === null ? null : (float) $brutto,
+                ];
+            })
             ->values();
     }
 
@@ -325,14 +303,16 @@ class AuftragsschreibenDaten
      */
     private function lieferant(Bestellung $bestellung): array
     {
+        $bestellung->loadMissing('auftragszeilen.angebot');
+
         $anschrift = is_array($bestellung->lieferanschrift) ? $bestellung->lieferanschrift : [];
         $name = $this->text($bestellung->lieferantenname);
         $nummer = $this->text($bestellung->lieferantennummer);
 
-        if ($name === null || $nummer === null) {
-            $angebot = $this->vergleichsangebote($bestellung)->first(
-                fn (Angebot $angebot): bool => filled($angebot->lieferantennummer) || filled($angebot->lieferantenname),
-            );
+        if ($name === null || $nummer === null || empty($anschrift['strasse'])) {
+            $angebot = $bestellung->auftragszeilen
+                ->map(fn (Auftragszeile $zeile): ?Angebot => $zeile->angebot)
+                ->first(fn (?Angebot $angebot): bool => $angebot instanceof Angebot && (filled($angebot->lieferantennummer) || filled($angebot->lieferantenname)));
 
             if ($angebot instanceof Angebot) {
                 $nummer ??= $this->text($angebot->lieferantennummer);

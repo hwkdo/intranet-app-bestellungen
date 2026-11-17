@@ -34,6 +34,7 @@ use Hwkdo\IntranetAppBestellungen\Services\Pdf\AuftragsschreibenDaten;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
 use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -1318,6 +1319,8 @@ class Detail extends Component
             return;
         }
 
+        $this->auftragsschreibenAusFormularUebernehmen();
+
         try {
             $anzahl = app(AuftragszeilenService::class)->ausAngeboten(
                 $this->bestellung,
@@ -1333,6 +1336,7 @@ class Detail extends Component
         $this->ausgewaehlteAngebotIds = [];
         $this->refreshBestellung();
         $this->syncAuftragszeilenDraft();
+        $this->syncAuftragsschreiben();
         unset($this->waehlbareAngebote);
         Flux::modal('angebote-waehlen')->close();
 
@@ -1351,6 +1355,8 @@ class Detail extends Component
         if (! $this->kannAuftragszeilenBearbeiten()) {
             return;
         }
+
+        $this->auftragsschreibenAusFormularUebernehmen();
 
         $this->validate([
             'manuelleZeileDatum' => ['required', 'date'],
@@ -1402,6 +1408,8 @@ class Detail extends Component
             return;
         }
 
+        $this->auftragsschreibenAusFormularUebernehmen();
+
         $this->validate([
             'auftragszeilenDraft.'.$idx.'.angebotsdatum' => ['required', 'date'],
             'auftragszeilenDraft.'.$idx.'.angebotsnummer' => ['required', 'string', 'max:100'],
@@ -1431,6 +1439,32 @@ class Detail extends Component
         $this->refreshBestellung();
         $this->syncAuftragszeilenDraft();
         Flux::toast(heading: 'Zeile gespeichert', text: 'Die Auftragszeile wurde aktualisiert.', variant: 'success');
+    }
+
+    public function auftragszeileAenderungenVerwerfen(int $idx): void
+    {
+        if (! $this->kannAuftragszeilenBearbeiten()) {
+            return;
+        }
+
+        $draft = $this->auftragszeilenDraft[$idx] ?? null;
+        if (! is_array($draft)) {
+            return;
+        }
+
+        $zeile = $this->bestellung->auftragszeilen->firstWhere('id', $draft['id'] ?? null);
+        if (! $zeile instanceof Auftragszeile) {
+            return;
+        }
+
+        $this->auftragszeilenDraft[$idx] = $this->auftragszeileAlsDraft($zeile);
+        $this->resetValidation([
+            'auftragszeilenDraft.'.$idx.'.angebotsdatum',
+            'auftragszeilenDraft.'.$idx.'.angebotsnummer',
+            'auftragszeilenDraft.'.$idx.'.betrag_netto',
+            'auftragszeilenDraft.'.$idx.'.betrag_brutto',
+            'auftragszeilenDraft.'.$idx.'.freitext',
+        ]);
     }
 
     public function auftragszeileEntfernen(int $zeileId): void
@@ -1486,23 +1520,10 @@ class Detail extends Component
             $this->auftragModus = $modus->value;
         }
 
-        $felder = [
+        $this->bestellung->forceFill([
             'auftrag_modus' => $modus,
-        ];
-
-        if (
-            $modus === AuftragModus::Vorlage
-            && ! filled($this->bestellung->auftragnehmer_anrede)
-            && ! filled($this->bestellung->auftragnehmer_ansprechpartner)
-            && ! filled($this->bestellung->auftragnehmer_email)
-        ) {
-            $vorbelegung = app(AuftragsschreibenDaten::class)->vorbelegungAusAngeboten($this->bestellung);
-            $felder['auftragnehmer_anrede'] = $vorbelegung['anrede'];
-            $felder['auftragnehmer_ansprechpartner'] = $vorbelegung['ansprechpartner'];
-            $felder['auftragnehmer_email'] = $vorbelegung['email'];
-        }
-
-        $this->bestellung->forceFill($felder)->save();
+        ])->save();
+        $this->auftragnehmerVorbelegenWennLeer();
 
         app(BestellungWorkflow::class)->logAktion(
             $this->bestellung,
@@ -1517,6 +1538,12 @@ class Detail extends Component
         $this->syncAuftragsschreiben();
     }
 
+    public function updatedAusfuehrungsfrist(): void
+    {
+        $this->auftragsschreibenAusFormularUebernehmen();
+        $this->bestellung->refresh();
+    }
+
     public function auftragsschreibenSpeichern(): void
     {
         if (! $this->kannAuftragszeilenBearbeiten()) {
@@ -1526,7 +1553,7 @@ class Detail extends Component
         $this->auftragnehmerAnrede = $this->auftragnehmerAnrede === '' ? null : $this->auftragnehmerAnrede;
 
         $this->validate([
-            'ausfuehrungsfrist' => ['required', 'date'],
+            'ausfuehrungsfrist' => ['nullable', 'date'],
             'auftragnehmerAnrede' => ['nullable', Rule::in(['herr', 'frau'])],
             'auftragnehmerAnsprechpartner' => ['nullable', 'string', 'max:255'],
             'auftragnehmerEmail' => ['nullable', 'email', 'max:255'],
@@ -1535,22 +1562,66 @@ class Detail extends Component
         $this->bestellung->forceFill([
             'ausfuehrungsfrist' => $this->ausfuehrungsfrist,
             'auftragnehmer_anrede' => $this->auftragnehmerAnrede,
-            'auftragnehmer_ansprechpartner' => $this->nullableText($this->auftragnehmerAnsprechpartner),
-            'auftragnehmer_email' => $this->nullableText($this->auftragnehmerEmail),
+            'auftragnehmer_ansprechpartner' => $this->nullableText($this->auftragnehmerAnsprechpartner) ?? '',
+            'auftragnehmer_email' => $this->nullableText($this->auftragnehmerEmail) ?? '',
         ])->save();
 
         app(BestellungWorkflow::class)->logAktion(
             $this->bestellung,
             Auth::user(),
             AktionTyp::AuftragszeileGeaendert,
-            'Auftragsschreiben aktualisiert.',
+            'Ansprechpartner im Auftragsschreiben aktualisiert.',
             payload: ['ausfuehrungsfrist' => $this->ausfuehrungsfrist],
         );
 
         $this->refreshBestellung();
         $this->syncAuftragsschreiben();
 
-        Flux::toast(heading: 'Auftragsschreiben gespeichert', text: 'Frist und Ansprechpartner wurden übernommen.', variant: 'success');
+        Flux::toast(heading: 'Ansprechpartner gespeichert', text: 'Die Angaben für das Anschreiben wurden übernommen.', variant: 'success');
+    }
+
+    public function auftragnehmerAenderungenVerwerfen(): void
+    {
+        if (! $this->kannAuftragszeilenBearbeiten()) {
+            return;
+        }
+
+        $this->auftragnehmerAnrede = $this->bestellung->auftragnehmer_anrede;
+        $this->auftragnehmerAnsprechpartner = $this->bestellung->auftragnehmer_ansprechpartner;
+        $this->auftragnehmerEmail = $this->bestellung->auftragnehmer_email;
+        $this->resetValidation([
+            'auftragnehmerAnrede',
+            'auftragnehmerAnsprechpartner',
+            'auftragnehmerEmail',
+        ]);
+    }
+
+    public function auftragnehmerIstGeaendert(): bool
+    {
+        return $this->vergleichstext($this->auftragnehmerAnrede) !== $this->vergleichstext($this->bestellung->auftragnehmer_anrede)
+            || $this->vergleichstext($this->auftragnehmerAnsprechpartner) !== $this->vergleichstext($this->bestellung->auftragnehmer_ansprechpartner)
+            || $this->vergleichstext($this->auftragnehmerEmail) !== $this->vergleichstext($this->bestellung->auftragnehmer_email);
+    }
+
+    public function auftragszeileIstGeaendert(int $idx): bool
+    {
+        $draft = $this->auftragszeilenDraft[$idx] ?? null;
+
+        if (! is_array($draft)) {
+            return false;
+        }
+
+        $zeile = $this->bestellung->auftragszeilen->firstWhere('id', $draft['id'] ?? null);
+
+        if (! $zeile instanceof Auftragszeile) {
+            return false;
+        }
+
+        return $this->vergleichstext($draft['angebotsdatum'] ?? null) !== $zeile->angebotsdatum?->toDateString()
+            || $this->vergleichstext($draft['angebotsnummer'] ?? null) !== $this->vergleichstext($zeile->angebotsnummer)
+            || $this->vergleichsbetrag($draft['betrag_netto'] ?? null) !== $this->vergleichsbetrag($zeile->betrag_netto)
+            || $this->vergleichsbetrag($draft['betrag_brutto'] ?? null) !== $this->vergleichsbetrag($zeile->betrag_brutto)
+            || $this->vergleichstext($draft['freitext'] ?? null) !== $this->vergleichstext($zeile->freitext);
     }
 
     /**
@@ -1578,6 +1649,48 @@ class Detail extends Component
             && $this->auftragnehmerEmail === $vorbelegung['email'];
     }
 
+    private function auftragsschreibenAusFormularUebernehmen(): void
+    {
+        if (! $this->bestellung->nutztAuftragsvorlage() || ! $this->kannAuftragszeilenBearbeiten()) {
+            return;
+        }
+
+        $frist = $this->nullableText($this->ausfuehrungsfrist);
+
+        if ($frist !== null) {
+            try {
+                $frist = Carbon::parse($frist)->toDateString();
+            } catch (\Throwable) {
+                return;
+            }
+        }
+
+        $anrede = in_array($this->auftragnehmerAnrede, ['herr', 'frau'], true) ? $this->auftragnehmerAnrede : null;
+        $email = $this->nullableText($this->auftragnehmerEmail);
+
+        if ($email !== null && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            $email = $this->bestellung->auftragnehmer_email;
+        }
+
+        $felder = [
+            'ausfuehrungsfrist' => $frist,
+        ];
+
+        if ($this->auftragnehmerAnrede !== null || $this->bestellung->auftragnehmer_anrede !== null) {
+            $felder['auftragnehmer_anrede'] = $anrede;
+        }
+
+        if (is_string($this->auftragnehmerAnsprechpartner) || $this->bestellung->auftragnehmer_ansprechpartner !== null) {
+            $felder['auftragnehmer_ansprechpartner'] = $this->nullableText($this->auftragnehmerAnsprechpartner) ?? '';
+        }
+
+        if (is_string($this->auftragnehmerEmail) || $this->bestellung->auftragnehmer_email !== null) {
+            $felder['auftragnehmer_email'] = $email ?? '';
+        }
+
+        $this->bestellung->forceFill($felder)->save();
+    }
+
     private function kannAuftragszeilenBearbeiten(): bool
     {
         return $this->bestellung->istAuftragsvergabe() && $this->kannBearbeiten();
@@ -1601,22 +1714,59 @@ class Detail extends Component
     private function syncAuftragszeilenDraft(): void
     {
         $this->auftragszeilenDraft = $this->bestellung->auftragszeilen
-            ->map(fn (Auftragszeile $zeile): array => [
-                'id' => $zeile->getKey(),
-                'angebot_id' => $zeile->angebot_id,
-                'nr' => $zeile->nr,
-                'angebotsdatum' => $zeile->angebotsdatum?->toDateString(),
-                'angebotsnummer' => $zeile->angebotsnummer,
-                'betrag_netto' => $zeile->betrag_netto,
-                'betrag_brutto' => $zeile->betrag_brutto,
-                'freitext' => $zeile->freitext,
-            ])
+            ->map(fn (Auftragszeile $zeile): array => $this->auftragszeileAlsDraft($zeile))
             ->values()
             ->all();
     }
 
+    /**
+     * @return array{id: int|string|null, angebot_id: int|null, nr: int|null, angebotsdatum: string|null, angebotsnummer: string|null, betrag_netto: mixed, betrag_brutto: mixed, freitext: string|null}
+     */
+    private function auftragszeileAlsDraft(Auftragszeile $zeile): array
+    {
+        return [
+            'id' => $zeile->getKey(),
+            'angebot_id' => $zeile->angebot_id,
+            'nr' => $zeile->nr,
+            'angebotsdatum' => $zeile->angebotsdatum?->toDateString(),
+            'angebotsnummer' => $zeile->angebotsnummer,
+            'betrag_netto' => $zeile->betrag_netto,
+            'betrag_brutto' => $zeile->betrag_brutto,
+            'freitext' => $zeile->freitext,
+        ];
+    }
+
+    private function auftragnehmerVorbelegenWennLeer(): void
+    {
+        if (! $this->bestellung->nutztAuftragsvorlage() || ! $this->kannAuftragszeilenBearbeiten()) {
+            return;
+        }
+
+        if (
+            $this->bestellung->auftragnehmer_anrede !== null
+            || $this->bestellung->auftragnehmer_ansprechpartner !== null
+            || $this->bestellung->auftragnehmer_email !== null
+        ) {
+            return;
+        }
+
+        $vorbelegung = app(AuftragsschreibenDaten::class)->vorbelegungAusAngeboten($this->bestellung);
+
+        if ($vorbelegung['anrede'] === null && $vorbelegung['ansprechpartner'] === null && $vorbelegung['email'] === null) {
+            return;
+        }
+
+        $this->bestellung->forceFill([
+            'auftragnehmer_anrede' => $vorbelegung['anrede'],
+            'auftragnehmer_ansprechpartner' => $vorbelegung['ansprechpartner'],
+            'auftragnehmer_email' => $vorbelegung['email'],
+        ])->save();
+    }
+
     private function syncAuftragsschreiben(): void
     {
+        $this->auftragnehmerVorbelegenWennLeer();
+
         $modus = $this->bestellung->auftrag_modus;
 
         $this->auftragModus = $modus instanceof AuftragModus ? $modus->value : AuftragModus::Tabelle->value;
@@ -1624,6 +1774,24 @@ class Detail extends Component
         $this->auftragnehmerAnrede = $this->bestellung->auftragnehmer_anrede;
         $this->auftragnehmerAnsprechpartner = $this->bestellung->auftragnehmer_ansprechpartner;
         $this->auftragnehmerEmail = $this->bestellung->auftragnehmer_email;
+    }
+
+    private function vergleichstext(mixed $value): ?string
+    {
+        return $this->nullableText(is_string($value) ? $value : (is_scalar($value) ? (string) $value : null));
+    }
+
+    private function vergleichsbetrag(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if (! is_numeric($value)) {
+            return $this->vergleichstext($value);
+        }
+
+        return number_format((float) $value, 2, '.', '');
     }
 
     private function nullableText(mixed $value): ?string

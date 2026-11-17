@@ -152,7 +152,7 @@ it('lässt den Tabellen-Auftragsschein unverändert, wenn keine Vorlage gewählt
         ->not->toContain('Ausführungsfrist');
 });
 
-it('füllt Adresse und Angebotswert aus dem Angebot, wenn noch keine Zeile übernommen wurde', function (): void {
+it('ignoriert hochgeladene Angebote, die nicht als Auftragszeile gewählt wurden', function (): void {
     $user = User::factory()->create();
     LieferantCache::query()->create([
         'lieferantennummer' => '7018260',
@@ -174,7 +174,7 @@ it('füllt Adresse und Angebotswert aus dem Angebot, wenn noch keine Zeile über
         'ausfuehrungsfrist' => '2026-04-15',
     ]);
 
-    Angebot::query()->create([
+    $gewaehlt = Angebot::query()->create([
         'bestellung_id' => $bestellung->id,
         'user_id' => $user->id,
         'typ' => 'angebot',
@@ -192,6 +192,33 @@ it('füllt Adresse und Angebotswert aus dem Angebot, wenn noch keine Zeile über
             ],
         ],
     ]);
+    Angebot::query()->create([
+        'bestellung_id' => $bestellung->id,
+        'user_id' => $user->id,
+        'typ' => 'angebot',
+        'lieferantenname' => 'Andere GmbH',
+        'nummer' => 'X-1',
+        'angebotsdatum' => '2023-08-01',
+        'betrag' => 99,
+    ]);
+
+    $ohneZeile = app(BestellscheinPdfService::class)->html($bestellung->fresh(), BestellungTyp::Auftragsvergabe);
+
+    expect($ohneZeile)
+        ->not->toContain('Tradeo GmbH')
+        ->not->toContain('Andere GmbH')
+        ->not->toContain('1.344,79 EURO');
+
+    Auftragszeile::factory()->create([
+        'bestellung_id' => $bestellung->id,
+        'angebot_id' => $gewaehlt->id,
+        'nr' => 1,
+        'angebotsdatum' => '2023-07-12',
+        'angebotsnummer' => 'AN-900194',
+        'betrag_netto' => 1130.08,
+        'betrag_brutto' => null,
+        'freitext' => null,
+    ]);
 
     $html = app(BestellscheinPdfService::class)->html($bestellung->fresh(), BestellungTyp::Auftragsvergabe);
 
@@ -202,8 +229,29 @@ it('füllt Adresse und Angebotswert aus dem Angebot, wenn noch keine Zeile über
         ->toContain('Ihr Angebot mit der Nr. AN-900194 vom 12.07.2023')
         ->toContain('1.344,79 EURO')
         ->toContain('Zu Hd. Daniele Altermann')
-        ->toContain('E-Mail: mail@servershop24.de')
-        ->not->toContain('gesamt: <strong>–</strong>');
+        ->not->toContain('Andere GmbH');
+});
+
+it('hält die Vorschau zurück, bis ein Angebot gewählt wurde', function (): void {
+    $user = User::factory()->create();
+    $bestellung = Bestellung::factory()->auftragsvergabe()->create([
+        'status' => BestellungStatus::Entwurf,
+        'user_id' => $user->id,
+        'auftrag_modus' => AuftragModus::Vorlage,
+        'betreff' => 'Festplatten',
+    ]);
+
+    Angebot::query()->create([
+        'bestellung_id' => $bestellung->id,
+        'user_id' => $user->id,
+        'typ' => 'angebot',
+        'lieferantenname' => 'Tradeo GmbH',
+        'nummer' => 'AN-900194',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Detail::class, ['bestellung' => $bestellung])
+        ->assertSee('Wählen Sie zuerst das Angebot, das beauftragt werden soll.');
 });
 
 it('übernimmt die Anschrift aus dem Lieferanten-Cache', function (): void {
@@ -360,6 +408,134 @@ it('übernimmt den Vorlagenmodus beim Wiederholen, aber nicht die Frist', functi
         ->and($kopie->auftragnehmer_anrede)->toBe('frau')
         ->and($kopie->auftragnehmer_ansprechpartner)->toBe('Lina Vogt')
         ->and($kopie->auftragnehmer_email)->toBe('lina@example.test');
+});
+
+it('speichert die Ausführungsfrist beim Setzen und mit der Auftragszeile', function (): void {
+    $user = User::factory()->create();
+    $bestellung = auftragMitZeile($user, [
+        'status' => BestellungStatus::Entwurf,
+        'auftrag_modus' => AuftragModus::Vorlage,
+        'ausfuehrungsfrist' => null,
+    ]);
+
+    $component = Livewire::actingAs($user)
+        ->test(Detail::class, ['bestellung' => $bestellung])
+        ->set('ausfuehrungsfrist', '2026-04-15')
+        ->assertSet('ausfuehrungsfrist', '2026-04-15');
+
+    expect($bestellung->fresh()->ausfuehrungsfrist?->toDateString())->toBe('2026-04-15')
+        ->and($component->instance()->kannEinreichen())->toBeTrue();
+
+    $component->call('auftragszeileSpeichern', 0)->assertHasNoErrors();
+
+    expect($bestellung->fresh()->ausfuehrungsfrist?->toDateString())->toBe('2026-04-15');
+});
+
+it('zeigt den Ansprechpartner aus dem gewählten Angebot im Formular', function (): void {
+    $user = User::factory()->create();
+    $bestellung = auftragMitZeile($user, [
+        'status' => BestellungStatus::Entwurf,
+        'auftrag_modus' => AuftragModus::Vorlage,
+        'auftragnehmer_anrede' => null,
+        'auftragnehmer_ansprechpartner' => null,
+        'auftragnehmer_email' => null,
+    ]);
+    $angebot = Angebot::query()->create([
+        'bestellung_id' => $bestellung->id,
+        'user_id' => $user->id,
+        'typ' => 'angebot',
+        'extraction_payload' => [
+            'contact' => [
+                'person' => 'Daniele Altermann',
+                'salutation' => null,
+                'email' => 'mail@servershop24.de',
+            ],
+        ],
+    ]);
+    $bestellung->auftragszeilen()->first()?->update(['angebot_id' => $angebot->id]);
+
+    Livewire::actingAs($user)
+        ->test(Detail::class, ['bestellung' => $bestellung->fresh()])
+        ->assertSet('auftragnehmerAnsprechpartner', 'Daniele Altermann')
+        ->assertSet('auftragnehmerEmail', 'mail@servershop24.de')
+        ->assertSee('aus Angebot erkannt');
+
+    expect($bestellung->fresh()->auftragnehmer_ansprechpartner)->toBe('Daniele Altermann');
+});
+
+it('lässt einen geleerten Ansprechpartner leer', function (): void {
+    $user = User::factory()->create();
+    $bestellung = auftragMitZeile($user, [
+        'status' => BestellungStatus::Entwurf,
+        'auftrag_modus' => AuftragModus::Vorlage,
+        'auftragnehmer_ansprechpartner' => '',
+        'auftragnehmer_email' => '',
+    ]);
+    $angebot = Angebot::query()->create([
+        'bestellung_id' => $bestellung->id,
+        'user_id' => $user->id,
+        'typ' => 'angebot',
+        'extraction_payload' => [
+            'contact' => [
+                'person' => 'Daniele Altermann',
+                'salutation' => null,
+                'email' => 'mail@servershop24.de',
+            ],
+        ],
+    ]);
+    $bestellung->auftragszeilen()->first()?->update(['angebot_id' => $angebot->id]);
+
+    Livewire::actingAs($user)
+        ->test(Detail::class, ['bestellung' => $bestellung->fresh()])
+        ->assertSet('auftragnehmerAnsprechpartner', '');
+
+    expect($bestellung->fresh()->auftragnehmer_ansprechpartner)->toBe('');
+});
+
+it('zeigt Speichern erst nach einer Änderung an Zeile oder Ansprechpartner', function (): void {
+    $user = User::factory()->create();
+    $bestellung = auftragMitZeile($user, [
+        'status' => BestellungStatus::Entwurf,
+        'auftrag_modus' => AuftragModus::Vorlage,
+        'auftragnehmer_ansprechpartner' => 'Kai Meier',
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(Detail::class, ['bestellung' => $bestellung])
+        ->assertDontSee('Zeile speichern')
+        ->assertDontSee('Auftragsschreiben speichern')
+        ->assertSee('Gespeichert')
+        ->set('auftragszeilenDraft.0.angebotsnummer', 'NEU-1')
+        ->assertSee('Änderung speichern')
+        ->call('auftragszeileSpeichern', 0)
+        ->assertHasNoErrors()
+        ->assertDontSee('Änderung speichern');
+
+    expect($bestellung->fresh()->auftragszeilen()->first()?->angebotsnummer)->toBe('NEU-1');
+});
+
+it('setzt geänderte Zeile und Ansprechpartner auf den gespeicherten Stand zurück', function (): void {
+    $user = User::factory()->create();
+    $bestellung = auftragMitZeile($user, [
+        'status' => BestellungStatus::Entwurf,
+        'auftrag_modus' => AuftragModus::Vorlage,
+        'auftragnehmer_ansprechpartner' => 'Kai Meier',
+    ]);
+    $nummer = $bestellung->auftragszeilen()->first()?->angebotsnummer;
+
+    Livewire::actingAs($user)
+        ->test(Detail::class, ['bestellung' => $bestellung])
+        ->set('auftragszeilenDraft.0.angebotsnummer', 'NEU-1')
+        ->set('auftragnehmerAnsprechpartner', 'Jemand anders')
+        ->assertSee('Änderungen rückgängig machen')
+        ->call('auftragszeileAenderungenVerwerfen', 0)
+        ->assertSet('auftragszeilenDraft.0.angebotsnummer', $nummer)
+        ->call('auftragnehmerAenderungenVerwerfen')
+        ->assertSet('auftragnehmerAnsprechpartner', 'Kai Meier')
+        ->assertDontSee('Änderung speichern');
+
+    expect($bestellung->fresh()->auftragnehmer_ansprechpartner)->toBe('Kai Meier')
+        ->and($bestellung->auftragszeilen()->first()?->angebotsnummer)->toBe($nummer);
 });
 
 function auftragMitZeile(User $user, array $attribute = [], ?float $brutto = 1190): Bestellung

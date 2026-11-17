@@ -13,68 +13,90 @@
     @endif
 
     @if ($bestellung->nutztAuftragsvorlage())
-        <flux:callout icon="document-text" variant="secondary">
-            Das Anschreiben wird aus den Angebotsdaten erzeugt. Sie tragen nur die Ausführungsfrist ein.
-        </flux:callout>
-
-        @if ($this->kannBearbeiten())
-            @php
-                $schreibensLuecken = $this->auftragsschreibenFehlendeAngaben();
-            @endphp
-            @if ($schreibensLuecken !== [])
-                <flux:callout icon="exclamation-triangle" variant="warning">
-                    Für das Schreiben fehlen noch: {{ implode(', ', $schreibensLuecken) }}.
-                </flux:callout>
+        @if ($auftragszeilenDraft === [])
+            <flux:callout icon="information-circle" variant="warning">
+                Wählen Sie zuerst das Angebot, das beauftragt werden soll.
+            </flux:callout>
+            @if ($this->kannBearbeiten())
+                <div class="flex justify-end">
+                    <flux:button size="sm" icon="eye" disabled>Vorschau</flux:button>
+                </div>
             @endif
+        @elseif ($this->kannBearbeiten())
+            <section class="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+                <div>
+                    <flux:heading size="sm">Anschreiben</flux:heading>
+                    <flux:text class="text-zinc-500">Frist und Ansprechpartner stehen im Auftragsschreiben. Die Frist wird beim Auswählen gespeichert.</flux:text>
+                </div>
 
-            <div class="grid gap-3 md:grid-cols-2">
-                <flux:field>
-                    <flux:label>Ausführungsfrist</flux:label>
-                    <flux:date-picker wire:model="ausfuehrungsfrist" locale="de-DE" />
-                    <flux:error name="ausfuehrungsfrist" />
-                </flux:field>
-            </div>
+                @php
+                    $schreibensLuecken = $this->auftragsschreibenFehlendeAngaben();
+                @endphp
+                @if ($schreibensLuecken !== [])
+                    <flux:callout icon="exclamation-triangle" variant="warning">
+                        Für das Schreiben fehlen noch: {{ implode(', ', $schreibensLuecken) }}.
+                    </flux:callout>
+                @endif
 
-            <div class="space-y-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
-                <div class="flex flex-wrap items-center gap-2">
-                    <flux:heading size="sm">Ansprechpartner beim Auftragnehmer</flux:heading>
-                    @if ($this->auftragnehmerAusAngebotErkannt())
-                        <flux:badge size="sm" color="sky">aus Angebot erkannt</flux:badge>
+                <div class="grid gap-3 md:grid-cols-2">
+                    <flux:field>
+                        <flux:label>Ausführungsfrist</flux:label>
+                        <flux:date-picker wire:model.live="ausfuehrungsfrist" locale="de-DE" />
+                        <flux:error name="ausfuehrungsfrist" />
+                    </flux:field>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <flux:heading size="sm">Ansprechpartner beim Auftragnehmer</flux:heading>
+                        @if ($this->auftragnehmerAusAngebotErkannt())
+                            <flux:badge size="sm" color="sky">aus Angebot erkannt</flux:badge>
+                        @endif
+                        @if (! $this->auftragnehmerIstGeaendert())
+                            <flux:badge size="sm" color="zinc">Gespeichert</flux:badge>
+                        @endif
+                    </div>
+                    <flux:text class="text-zinc-500">Steht im Brief unter „Zu Hd.“. Leer lassen, wenn unbekannt.</flux:text>
+                    <div class="grid gap-3 md:grid-cols-3">
+                        <div>
+                            <flux:select wire:model.live="auftragnehmerAnrede" label="Anrede" placeholder="Keine Angabe" clearable>
+                                <flux:select.option value="herr">Herr</flux:select.option>
+                                <flux:select.option value="frau">Frau</flux:select.option>
+                            </flux:select>
+                            <flux:error name="auftragnehmerAnrede" />
+                        </div>
+                        <div>
+                            <flux:input wire:model.live.debounce.400ms="auftragnehmerAnsprechpartner" label="Name" />
+                            <flux:error name="auftragnehmerAnsprechpartner" />
+                        </div>
+                        <div>
+                            <flux:input type="email" wire:model.live.debounce.400ms="auftragnehmerEmail" label="E-Mail" />
+                            <flux:error name="auftragnehmerEmail" />
+                        </div>
+                    </div>
+                    @if ($this->auftragnehmerIstGeaendert())
+                        <div class="flex flex-wrap justify-end gap-2">
+                            <flux:button size="sm" variant="ghost" icon="arrow-uturn-left" wire:click="auftragnehmerAenderungenVerwerfen">
+                                Änderungen rückgängig machen
+                            </flux:button>
+                            <flux:button size="sm" variant="primary" icon="check" wire:click="auftragsschreibenSpeichern">
+                                Änderung speichern
+                            </flux:button>
+                        </div>
                     @endif
                 </div>
-                <flux:text class="text-zinc-500">Vorbelegt aus dem Angebot, bitte prüfen. Leer lassen, wenn unbekannt.</flux:text>
-                <div class="grid gap-3 md:grid-cols-3">
-                    <div>
-                        <flux:select wire:model="auftragnehmerAnrede" label="Anrede" placeholder="Keine Angabe" clearable>
-                            <flux:select.option value="herr">Herr</flux:select.option>
-                            <flux:select.option value="frau">Frau</flux:select.option>
-                        </flux:select>
-                        <flux:error name="auftragnehmerAnrede" />
-                    </div>
-                    <div>
-                        <flux:input wire:model="auftragnehmerAnsprechpartner" label="Name" />
-                        <flux:error name="auftragnehmerAnsprechpartner" />
-                    </div>
-                    <div>
-                        <flux:input type="email" wire:model="auftragnehmerEmail" label="E-Mail" />
-                        <flux:error name="auftragnehmerEmail" />
-                    </div>
-                </div>
-            </div>
 
-            <div class="flex flex-wrap justify-end gap-2">
-                <flux:button
-                    size="sm"
-                    icon="eye"
-                    :href="route('apps.bestellungen.pdf.inline', ['bestellung' => $bestellung, 'typ' => 'auftragsvergabe'])"
-                    target="_blank"
-                >
-                    Vorschau
-                </flux:button>
-                <flux:button size="sm" variant="primary" icon="check" wire:click="auftragsschreibenSpeichern">
-                    Auftragsschreiben speichern
-                </flux:button>
-            </div>
+                <div class="flex justify-end">
+                    <flux:button
+                        size="sm"
+                        icon="eye"
+                        :href="route('apps.bestellungen.pdf.inline', ['bestellung' => $bestellung, 'typ' => 'auftragsvergabe'])"
+                        target="_blank"
+                    >
+                        Vorschau
+                    </flux:button>
+                </div>
+            </section>
         @else
             <dl class="grid gap-2 text-sm md:grid-cols-2">
                 <div>
@@ -106,6 +128,17 @@
         </flux:callout>
     @endif
 
+    <div>
+        <flux:heading size="sm">Auftragszeilen</flux:heading>
+        <flux:text class="text-zinc-500">
+            @if ($this->kannBearbeiten())
+                Eine übernommene Zeile ist bereits gespeichert. Der Button erscheint, sobald Sie etwas ändern.
+            @else
+                Beauftragte Angebote dieser Auftragsvergabe.
+            @endif
+        </flux:text>
+    </div>
+
     @if ($this->kannBearbeiten())
         <div class="flex flex-wrap gap-2">
             <flux:button size="sm" icon="document-text" x-on:click="$flux.modal('angebote-waehlen').show()">
@@ -124,12 +157,15 @@
             @foreach ($auftragszeilenDraft as $idx => $zeile)
                 <div wire:key="auftragszeile-{{ $zeile['id'] }}" class="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-2">
                             <flux:heading size="sm">Zeile {{ $zeile['nr'] }}</flux:heading>
                             @if ($zeile['angebot_id'])
                                 <flux:badge size="sm" color="sky">aus Angebot</flux:badge>
                             @else
                                 <flux:badge size="sm" color="zinc">manuell</flux:badge>
+                            @endif
+                            @if ($this->kannBearbeiten() && ! $this->auftragszeileIstGeaendert($idx))
+                                <flux:badge size="sm" color="zinc">Gespeichert</flux:badge>
                             @endif
                         </div>
                         @if ($this->kannBearbeiten())
@@ -150,15 +186,15 @@
                     @if ($this->kannBearbeiten())
                         <div class="grid gap-3 md:grid-cols-4">
                             <div>
-                                <flux:input type="date" wire:model="auftragszeilenDraft.{{ $idx }}.angebotsdatum" label="Angebotsdatum" />
+                                <flux:input type="date" wire:model.live="auftragszeilenDraft.{{ $idx }}.angebotsdatum" label="Angebotsdatum" />
                                 <flux:error name="auftragszeilenDraft.{{ $idx }}.angebotsdatum" />
                             </div>
                             <div>
-                                <flux:input wire:model="auftragszeilenDraft.{{ $idx }}.angebotsnummer" label="Angebots-Nr." />
+                                <flux:input wire:model.live.debounce.400ms="auftragszeilenDraft.{{ $idx }}.angebotsnummer" label="Angebots-Nr." />
                                 <flux:error name="auftragszeilenDraft.{{ $idx }}.angebotsnummer" />
                             </div>
                             <div>
-                                <flux:input type="number" step="0.01" min="0" wire:model="auftragszeilenDraft.{{ $idx }}.betrag_netto" label="Netto (€)" />
+                                <flux:input type="number" step="0.01" min="0" wire:model.live.debounce.400ms="auftragszeilenDraft.{{ $idx }}.betrag_netto" label="Netto (€)" />
                                 <flux:error name="auftragszeilenDraft.{{ $idx }}.betrag_netto" />
                             </div>
                             <div>
@@ -166,7 +202,7 @@
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    wire:model="auftragszeilenDraft.{{ $idx }}.betrag_brutto"
+                                    wire:model.live.debounce.400ms="auftragszeilenDraft.{{ $idx }}.betrag_brutto"
                                     :label="$bestellung->nutztAuftragsvorlage() ? 'Brutto (€)' : 'Brutto (€, optional)'"
                                     :description="$bestellung->nutztAuftragsvorlage() ? 'Pflicht für das Auftragsschreiben, inklusive Umsatzsteuer.' : null"
                                 />
@@ -175,7 +211,7 @@
                             @unless ($bestellung->nutztAuftragsvorlage())
                                 <div class="md:col-span-4">
                                     <flux:textarea
-                                        wire:model="auftragszeilenDraft.{{ $idx }}.freitext"
+                                        wire:model.live.debounce.400ms="auftragszeilenDraft.{{ $idx }}.freitext"
                                         label="Freitext"
                                         description="Steht auf dem Auftragsschein unter dieser Zeile, zum Beispiel ein Hinweis zum Angebot."
                                         rows="3"
@@ -184,11 +220,16 @@
                                 </div>
                             @endunless
                         </div>
-                        <div class="mt-3 flex justify-end">
-                            <flux:button size="sm" variant="primary" icon="check" wire:click="auftragszeileSpeichern({{ $idx }})">
-                                Zeile speichern
-                            </flux:button>
-                        </div>
+                        @if ($this->auftragszeileIstGeaendert($idx))
+                            <div class="mt-3 flex flex-wrap justify-end gap-2">
+                                <flux:button size="sm" variant="ghost" icon="arrow-uturn-left" wire:click="auftragszeileAenderungenVerwerfen({{ $idx }})">
+                                    Änderungen rückgängig machen
+                                </flux:button>
+                                <flux:button size="sm" variant="primary" icon="check" wire:click="auftragszeileSpeichern({{ $idx }})">
+                                    Änderung speichern
+                                </flux:button>
+                            </div>
+                        @endif
                     @else
                         <dl class="grid gap-2 text-sm md:grid-cols-4">
                             <div>
