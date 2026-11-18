@@ -107,7 +107,7 @@
         <form wire:submit="speichern" class="space-y-6">
             @if ($errors->any())
                 <flux:callout icon="exclamation-triangle" variant="danger">
-                    <div class="font-medium">Bitte korrigiere die markierten Eingaben.</div>
+                    <div class="font-medium">Bitte korrigieren Sie die markierten Eingaben.</div>
                     <ul class="mt-1 list-disc pl-5 text-sm">
                         @foreach ($errors->all() as $error)
                             <li>{{ $error }}</li>
@@ -116,7 +116,7 @@
                 </flux:callout>
             @endif
 
-            <flux:card>
+            <section class="glass-card overflow-hidden p-5">
                 <flux:heading size="lg" class="mb-4">Allgemeine Angaben</flux:heading>
 
                 <div class="grid gap-4 md:grid-cols-2">
@@ -309,10 +309,10 @@
                         <flux:error name="begruendung" />
                     </div>
                 </div>
-            </flux:card>
+            </section>
 
             @unless ($this->istAuftragsvergabe())
-            <flux:card>
+            <section class="glass-card overflow-hidden p-5">
                 <div class="flex items-center justify-between mb-4">
                     <flux:heading size="lg">Positionen</flux:heading>
                     <div class="flex items-center gap-2">
@@ -323,7 +323,7 @@
 
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead class="text-xs uppercase tracking-wide text-zinc-600 dark:text-white/70 border-b border-zinc-200 dark:border-zinc-700">
+                        <thead class="text-xs uppercase tracking-wide text-zinc-600 dark:text-white/70 border-b border-[#d0e3f9] dark:border-white/10">
                             <tr>
                                 <th class="py-2 pr-2 text-left w-10">Nr.</th>
                                 <th class="py-2 px-2 text-left">Bezeichnung</th>
@@ -336,7 +336,7 @@
                                 <th class="py-2 pl-2 w-10"></th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        <tbody class="divide-y divide-[#d0e3f9] dark:divide-white/10">
                             @foreach ($positionen as $idx => $position)
                                 @php($isPdfPosition = $this->isPdfPosition($idx))
                                 @php($zeilenSumme = (float) ($position['menge'] ?? 0) * (float) ($position['preis'] ?? 0))
@@ -345,7 +345,7 @@
                                         {{ $idx + 1 }}
                                         @if ($isPdfPosition)
                                             <div class="mt-1">
-                                                <flux:badge size="sm" color="sky" icon="document-text">PDF</flux:badge>
+                                                <flux:badge size="sm" color="zinc" icon="document-text">PDF</flux:badge>
                                             </div>
                                         @endif
                                     </td>
@@ -447,8 +447,8 @@
                                             @enderror
 
                                             @if (! empty($positionPdfs[$idx]))
-                                                <div class="mt-1 flex items-center gap-2 rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
-                                                    <flux:icon name="document-text" class="size-4 shrink-0 text-sky-500" />
+                                                <div class="mt-1 flex items-center gap-2 rounded border border-[#d0e3f9] px-2 py-1 text-xs text-zinc-600 dark:border-white/10 dark:text-zinc-300">
+                                                    <flux:icon name="document-text" class="size-4 shrink-0 text-[#073070] dark:text-[#d0e3f9]" />
                                                     <span class="truncate" title="{{ $positionPdfs[$idx]->getClientOriginalName() }}">
                                                         {{ $positionPdfs[$idx]->getClientOriginalName() }}
                                                     </span>
@@ -490,14 +490,16 @@
                         <span class="text-zinc-500">(inkl. 19&nbsp;% USt.)</span>
                     </flux:text>
                 </div>
-            </flux:card>
+            </section>
             @else
-                <flux:callout icon="document-check" variant="secondary">
-                    Positionen gibt es bei der Auftragsvergabe nicht. Nach dem Anlegen laden Sie Angebote hoch und erzeugen daraus die Zeilen des Auftragsscheins.
-                </flux:callout>
+                <x-intranet-app-bestellungen::hwk-card title="Positionen" icon="document-check" padded>
+                    <p class="text-sm text-slate-600 dark:text-white/70">
+                        Positionen gibt es bei der Auftragsvergabe nicht. Nach dem Anlegen laden Sie Angebote hoch und erzeugen daraus die Zeilen des Auftragsscheins.
+                    </p>
+                </x-intranet-app-bestellungen::hwk-card>
             @endunless
 
-            <flux:card>
+            <section class="glass-card overflow-hidden p-5">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <flux:heading size="lg">Kontierung</flux:heading>
@@ -508,7 +510,7 @@
 
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
-                        <thead class="text-xs uppercase tracking-wide text-zinc-600 dark:text-white/70 border-b border-zinc-200 dark:border-zinc-700">
+                        <thead class="text-xs uppercase tracking-wide text-zinc-600 dark:text-white/70 border-b border-[#d0e3f9] dark:border-white/10">
                             <tr>
                                 <th class="py-2 px-2 text-left">Kostenstelle</th>
                                 <th class="py-2 px-2 text-left w-48">Kursnummer</th>
@@ -517,7 +519,7 @@
                                 <th class="py-2 pl-2 w-10"></th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                        <tbody class="divide-y divide-[#d0e3f9] dark:divide-white/10">
                             @foreach ($kontierung as $kIdx => $kontZeile)
                                 <tr wire:key="kont-{{ $kIdx }}" class="align-top">
                                     <td class="py-2 px-2">
@@ -600,9 +602,9 @@
                         <flux:badge size="sm" color="amber">Nicht 100 %</flux:badge>
                     </span>
                 </div>
-            </flux:card>
+            </section>
 
-            <flux:card>
+            <section class="glass-card overflow-hidden p-5">
                 <flux:heading size="md" class="mb-2">Vorschau Workflow</flux:heading>
                 @if ($this->istAuftragsvergabe())
                     <flux:callout icon="information-circle">
@@ -616,7 +618,7 @@
                         <flux:callout icon="exclamation-triangle" variant="warning">{{ $this->angebotsHinweis() }}</flux:callout>
                     @endif
                 @endif
-            </flux:card>
+            </section>
 
             <div class="flex justify-end gap-3">
                 <flux:button type="button" variant="ghost" :href="route('apps.bestellungen.index')" wire:navigate>

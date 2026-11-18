@@ -23,7 +23,7 @@
                 </div>
             @endif
         @elseif ($this->kannBearbeiten())
-            <section class="space-y-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+            <section class="space-y-4 rounded-lg border border-[#d0e3f9] p-4 dark:border-white/10">
                 <div>
                     <flux:heading size="sm">Anschreiben</flux:heading>
                     <flux:text class="text-zinc-500">Frist und Ansprechpartner stehen im Auftragsschreiben. Die Frist wird beim Auswählen gespeichert.</flux:text>
@@ -50,7 +50,7 @@
                     <div class="flex flex-wrap items-center gap-2">
                         <flux:heading size="sm">Ansprechpartner beim Auftragnehmer</flux:heading>
                         @if ($this->auftragnehmerAusAngebotErkannt())
-                            <flux:badge size="sm" color="sky">aus Angebot erkannt</flux:badge>
+                            <flux:badge size="sm" color="zinc">aus Angebot erkannt</flux:badge>
                         @endif
                         @if (! $this->auftragnehmerIstGeaendert())
                             <flux:badge size="sm" color="zinc">Gespeichert</flux:badge>
@@ -151,16 +151,18 @@
     @endif
 
     @if ($auftragszeilenDraft === [])
-        <flux:text class="text-zinc-500">Noch keine Auftragszeilen. Wählen Sie hochgeladene Angebote aus oder erfassen Sie eine Zeile manuell.</flux:text>
+        <x-intranet-app-bestellungen::hwk-empty bare icon="document-check" title="Keine Auftragszeilen">
+            Noch keine Auftragszeilen. Wählen Sie hochgeladene Angebote aus oder erfassen Sie eine Zeile manuell.
+        </x-intranet-app-bestellungen::hwk-empty>
     @else
         <div class="space-y-4">
             @foreach ($auftragszeilenDraft as $idx => $zeile)
-                <div wire:key="auftragszeile-{{ $zeile['id'] }}" class="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+                <div wire:key="auftragszeile-{{ $zeile['id'] }}" class="rounded-lg border border-[#d0e3f9] p-4 dark:border-white/10">
                     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div class="flex flex-wrap items-center gap-2">
                             <flux:heading size="sm">Zeile {{ $zeile['nr'] }}</flux:heading>
                             @if ($zeile['angebot_id'])
-                                <flux:badge size="sm" color="sky">aus Angebot</flux:badge>
+                                <flux:badge size="sm" color="zinc">aus Angebot</flux:badge>
                             @else
                                 <flux:badge size="sm" color="zinc">manuell</flux:badge>
                             @endif

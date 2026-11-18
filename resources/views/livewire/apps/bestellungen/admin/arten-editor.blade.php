@@ -1,11 +1,13 @@
 <div>
-    <div class="flex items-center justify-between mb-4">
-        <flux:heading size="lg">Bestell-Arten</flux:heading>
-        <flux:button icon="plus" variant="primary" wire:click="neu">Neue Art</flux:button>
-    </div>
+    <x-intranet-app-bestellungen::hwk-card title="Bestell-Arten" icon="rectangle-stack" description="Arten stehen beim Anlegen einer Bestellung zur Auswahl.">
+        <x-slot:actions>
+            <flux:button icon="plus" variant="primary" wire:click="neu">Neue Art</flux:button>
+        </x-slot:actions>
 
-    @if ($this->arten->isEmpty())
-        <flux:text class="text-zinc-500">Keine Arten definiert.</flux:text>
+        @if ($this->arten->isEmpty())
+            <x-intranet-app-bestellungen::hwk-empty bare icon="rectangle-stack" title="Keine Arten">
+                Keine Arten definiert.
+            </x-intranet-app-bestellungen::hwk-empty>
     @else
         <flux:table>
             <flux:table.columns>
@@ -37,6 +39,7 @@
             </flux:table.rows>
         </flux:table>
     @endif
+    </x-intranet-app-bestellungen::hwk-card>
 
     <flux:modal name="art-modal" :show="false">
         <form wire:submit="speichern" class="space-y-3">

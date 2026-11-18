@@ -3,10 +3,12 @@
         heading="Interne Bestellungen"
         subheading="Interne Bedarfsanforderungen, die Ihnen als Fachabteilung zugewiesen wurden"
     >
-        <flux:card>
-            @if ($bestellungen->isEmpty())
-                <flux:text class="text-zinc-500">Aktuell sind Ihnen keine internen Bestellungen zugewiesen.</flux:text>
-            @else
+        @if ($bestellungen->isEmpty())
+            <x-intranet-app-bestellungen::hwk-empty icon="building-office-2" title="Keine internen Bestellungen">
+                Aktuell sind Ihnen keine internen Bestellungen zugewiesen.
+            </x-intranet-app-bestellungen::hwk-empty>
+        @else
+            <x-intranet-app-bestellungen::hwk-card title="Zugewiesene Bestellungen" icon="building-office-2" description="Offene Bedarfsanforderungen können Sie direkt bearbeiten.">
                 <flux:table>
                     <flux:table.columns>
                         <flux:table.column>BEN</flux:table.column>
@@ -23,7 +25,7 @@
                                 <flux:table.cell>{{ optional($bestellung->user)->name }}</flux:table.cell>
                                 <flux:table.cell>
                                     <span class="block">{{ $bestellung->betreff ?: '—' }}</span>
-                                    <span class="text-xs text-zinc-500">{{ $bestellung->lieferantenname }}</span>
+                                    <span class="text-xs text-slate-600 dark:text-white/70">{{ $bestellung->lieferantenname }}</span>
                                 </flux:table.cell>
                                 <flux:table.cell>
                                     <flux:badge :color="$bestellung->status?->color()" size="sm">
@@ -58,7 +60,7 @@
                         @endforeach
                     </flux:table.rows>
                 </flux:table>
-            @endif
-        </flux:card>
+            </x-intranet-app-bestellungen::hwk-card>
+        @endif
     </x-intranet-app-bestellungen::bestellungen-layout>
 </div>

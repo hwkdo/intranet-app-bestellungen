@@ -6,13 +6,13 @@
         </div>
 
         @if (empty($stufen))
-            <flux:callout icon="exclamation-triangle" variant="warning">
+            <x-intranet-app-bestellungen::hwk-empty icon="adjustments-horizontal" title="Keine Stufen">
                 Keine Stufen definiert. Bestellungen können bislang nicht freigegeben werden.
-            </flux:callout>
+            </x-intranet-app-bestellungen::hwk-empty>
         @else
             <div class="space-y-6">
                 @foreach ($stufen as $idx => $stufe)
-                    <flux:card wire:key="stufe-{{ $idx }}">
+                    <section class="glass-card overflow-hidden p-5" wire:key="stufe-{{ $idx }}">
                         {{-- Header --}}
                         <div class="mb-4 flex items-center justify-between">
                             <flux:heading size="sm">Stufe {{ $idx + 1 }}: {{ $stufe['bezeichnung'] ?? '' }}</flux:heading>
@@ -162,7 +162,7 @@
                                 </div>
                             @endif
                         </div>
-                    </flux:card>
+                    </section>
                 @endforeach
             </div>
         @endif
@@ -171,11 +171,11 @@
             <flux:button variant="primary" icon="check" wire:click="speichern">Speichern</flux:button>
         </div>
 
-        <flux:card>
+        <section class="glass-card overflow-hidden p-5">
             <flux:heading size="sm" class="mb-2">Freigabe-Stufen als JSON (nur dieses Array)</flux:heading>
             <flux:description class="mb-3">
                 Export aus einer Umgebung kopieren und in einer anderen einfügen. Es wird nur
-                <code class="rounded bg-zinc-100 px-1 py-0.5 text-xs dark:bg-zinc-800">freigabeStufen</code>
+                <code class="rounded bg-zinc-100 px-1 py-0.5 text-xs dark:bg-white/10">freigabeStufen</code>
                 ersetzt; alle übrigen App-Einstellungen bleiben unverändert. Rollen-Namen müssen in der Zielumgebung existieren.
             </flux:description>
 
@@ -203,7 +203,7 @@
                     id="freigabe-stufen-export-json"
                     readonly
                     rows="14"
-                    class="w-full resize-y rounded-lg border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                    class="w-full resize-y rounded-lg border border-[#d0e3f9] bg-[#d0e3f9]/30 p-3 font-mono text-xs text-zinc-900 dark:border-white/10 dark:bg-[#04214e] dark:text-zinc-100"
                 >{{ $this->freigabeStufenAlsFormatiertesJson() }}</textarea>
             </div>
 
@@ -230,6 +230,6 @@
                     Aus JSON übernehmen &amp; speichern
                 </flux:button>
             </div>
-        </flux:card>
+        </section>
     </div>
 </div>

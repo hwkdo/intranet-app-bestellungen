@@ -1,17 +1,15 @@
-<flux:card class="glass-card">
+<section class="glass-card overflow-hidden p-5">
     <flux:heading size="lg" class="mb-2">KI-Gateway</flux:heading>
     <flux:text class="mb-6 text-sm text-zinc-500">
         Provider und Modell für die Angebotsextraktion. Leere Felder nutzen die globalen Einstellungen unter Manager → Base Settings.
     </flux:text>
 
-    <flux:callout class="mb-4" icon="information-circle">
-        <flux:callout.heading>Globale KI-Standards</flux:callout.heading>
-        <flux:callout.text>
-            Text: <strong>{{ $this->baseAiTextSummary }}</strong><br>
-            Bilder: <strong>{{ $this->baseAiImageSummary }}</strong><br>
-            Klassifikation: <strong>{{ $this->baseAiClassificationSummary }}</strong>
-        </flux:callout.text>
-    </flux:callout>
+    <div class="mb-4 rounded-xl bg-[#d0e3f9]/30 px-4 py-3 text-sm text-slate-600 dark:bg-white/10 dark:text-white/70">
+        <p class="font-medium text-[#073070] dark:text-white">Globale KI-Standards</p>
+        <p class="mt-1">Text: <strong class="text-[#073070] dark:text-white">{{ $this->baseAiTextSummary }}</strong></p>
+        <p>Bilder: <strong class="text-[#073070] dark:text-white">{{ $this->baseAiImageSummary }}</strong></p>
+        <p>Klassifikation: <strong class="text-[#073070] dark:text-white">{{ $this->baseAiClassificationSummary }}</strong></p>
+    </div>
 
     <x-intranet-app-base::admin-ai-settings
         ai-text-provider-override="aiTextProviderOverride"
@@ -38,4 +36,4 @@
             KI-Einstellungen speichern
         </flux:button>
     </div>
-</flux:card>
+</section>

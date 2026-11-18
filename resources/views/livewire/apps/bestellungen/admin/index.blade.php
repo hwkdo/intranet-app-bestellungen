@@ -1,17 +1,19 @@
 <div>
     <x-intranet-app-bestellungen::bestellungen-layout heading="Bestellungen-Administration" subheading="Wertgrenzen, Angebotsregeln, Stammdaten und Monitoring">
         <flux:tab.group>
-            <flux:tabs wire:model.live="activeTab">
-                <flux:tab name="wertgrenzen" icon="adjustments-horizontal">Wertgrenzen &amp; Freigaben</flux:tab>
-                <flux:tab name="angebote" icon="check-badge">Angebotsregeln</flux:tab>
-                <flux:tab name="arten" icon="rectangle-stack">Bestell-Arten</flux:tab>
-                <flux:tab name="anlagen" icon="paper-clip">Anlagen</flux:tab>
-                <flux:tab name="stammdaten" icon="circle-stack">Stammdaten</flux:tab>
-                <flux:tab name="monitoring" icon="eye">Monitoring</flux:tab>
-                <flux:tab name="settings" icon="cog-6-tooth">Allgemeine Einstellungen</flux:tab>
-                <flux:tab name="ki" icon="sparkles">KI</flux:tab>
-                <flux:tab name="hintergrund" icon="clock">Hintergrund</flux:tab>
-            </flux:tabs>
+            <div class="glass-card sticky top-3 z-20 mb-4 p-3" style="--glass-opacity: 0.92">
+                <flux:tabs variant="pills" class="hwk-pills" wire:model.live="activeTab">
+                    <flux:tab name="wertgrenzen" icon="adjustments-horizontal">Wertgrenzen &amp; Freigaben</flux:tab>
+                    <flux:tab name="angebote" icon="check-badge">Angebotsregeln</flux:tab>
+                    <flux:tab name="arten" icon="rectangle-stack">Bestell-Arten</flux:tab>
+                    <flux:tab name="anlagen" icon="paper-clip">Anlagen</flux:tab>
+                    <flux:tab name="stammdaten" icon="circle-stack">Stammdaten</flux:tab>
+                    <flux:tab name="monitoring" icon="eye">Monitoring</flux:tab>
+                    <flux:tab name="settings" icon="cog-6-tooth">Allgemeine Einstellungen</flux:tab>
+                    <flux:tab name="ki" icon="sparkles">KI</flux:tab>
+                    <flux:tab name="hintergrund" icon="clock">Hintergrund</flux:tab>
+                </flux:tabs>
+            </div>
 
             <flux:tab.panel name="wertgrenzen">
                 <livewire:intranet-app-bestellungen::apps.bestellungen.admin.wertgrenzen-editor />
@@ -38,47 +40,59 @@
             </flux:tab.panel>
 
             <flux:tab.panel name="settings">
-                @livewire('intranet-app-base::admin-settings', [
-                    'appIdentifier' => 'bestellungen',
-                    'settingsModelClass' => \Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings::class,
-                    'appSettingsClass' => \Hwkdo\IntranetAppBestellungen\Data\AppSettings::class,
-                    'excludedKeys' => [
-                        'aiTextProviderOverride',
-                        'aiTextModelOverride',
-                        'aiImageProviderOverride',
-                        'aiImageModelOverride',
-                        'aiImageEditProviderOverride',
-                        'aiImageEditModelOverride',
-                        'aiClassificationProviderOverride',
-                        'aiClassificationModelOverride',
-                        'documentParseEngineOverride',
-                        'documentParseTierOverride',
-                    ],
-                ])
+                <section class="glass-card overflow-hidden p-5">
+                    @livewire('intranet-app-base::admin-settings', [
+                        'appIdentifier' => 'bestellungen',
+                        'settingsModelClass' => \Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings::class,
+                        'appSettingsClass' => \Hwkdo\IntranetAppBestellungen\Data\AppSettings::class,
+                        'excludedKeys' => [
+                            'aiTextProviderOverride',
+                            'aiTextModelOverride',
+                            'aiImageProviderOverride',
+                            'aiImageModelOverride',
+                            'aiImageEditProviderOverride',
+                            'aiImageEditModelOverride',
+                            'aiClassificationProviderOverride',
+                            'aiClassificationModelOverride',
+                            'documentParseEngineOverride',
+                            'documentParseTierOverride',
+                        ],
+                    ])
+                </section>
             </flux:tab.panel>
 
             <flux:tab.panel name="ki">
                 <div class="min-h-[400px] space-y-4">
-                    <flux:callout icon="information-circle" variant="secondary">
-                        Kassenbon-Fotos (JPG, PNG, WebP) lesen nur die Document-Parse-Motoren Vision und LlamaParse. Pdf-to-Text und HwkAdmin verarbeiten ausschließlich PDF.
-                    </flux:callout>
+                    <section class="glass-card px-5 py-4">
+                        <div class="flex items-start gap-3">
+                            <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-[#073070]/10 text-[#073070] dark:bg-white/10 dark:text-white">
+                                <flux:icon name="information-circle" variant="micro" class="size-5" />
+                            </span>
+                            <p class="text-sm text-slate-600 dark:text-white/70">
+                                Kassenbon-Fotos (JPG, PNG, WebP) lesen nur die Document-Parse-Motoren Vision und LlamaParse. Pdf-to-Text und HwkAdmin verarbeiten ausschließlich PDF.
+                            </p>
+                        </div>
+                    </section>
 
-                    @livewire('intranet-app-base::document-parse-settings', [
-                        'appIdentifier' => 'bestellungen',
-                        'settingsModelClass' => \Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings::class,
-                        'appSettingsClass' => \Hwkdo\IntranetAppBestellungen\Data\AppSettings::class,
-                    ])
+                    <section class="glass-card overflow-hidden p-5">
+                        @livewire('intranet-app-base::document-parse-settings', [
+                            'appIdentifier' => 'bestellungen',
+                            'settingsModelClass' => \Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings::class,
+                            'appSettingsClass' => \Hwkdo\IntranetAppBestellungen\Data\AppSettings::class,
+                        ])
+                    </section>
 
                     <livewire:intranet-app-bestellungen::apps.bestellungen.admin.ki-einstellungen />
                 </div>
             </flux:tab.panel>
-        <flux:tab.panel name="hintergrund">
-            @if ($activeTab === 'hintergrund')
-                <div class="min-h-[400px]">
-                    @livewire('intranet-app-base::background-activities', ['appIdentifier' => 'bestellungen'], key('bestellungen-admin-hintergrund'))
-                </div>
-            @endif
-        </flux:tab.panel>
+
+            <flux:tab.panel name="hintergrund">
+                @if ($activeTab === 'hintergrund')
+                    <div class="min-h-[400px]">
+                        @livewire('intranet-app-base::background-activities', ['appIdentifier' => 'bestellungen'], key('bestellungen-admin-hintergrund'))
+                    </div>
+                @endif
+            </flux:tab.panel>
         </flux:tab.group>
     </x-intranet-app-bestellungen::bestellungen-layout>
 </div>

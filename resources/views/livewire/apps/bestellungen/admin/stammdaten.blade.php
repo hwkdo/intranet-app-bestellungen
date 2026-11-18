@@ -1,11 +1,13 @@
 <div>
     <flux:tab.group>
-        <flux:tabs wire:model.live="aktiveTab">
-            <flux:tab name="lieferanten" icon="truck">Lieferanten</flux:tab>
-            <flux:tab name="kostenstellen" icon="banknotes">Kostenstellen</flux:tab>
-        </flux:tabs>
+        <div class="glass-card sticky top-3 z-20 mb-4 p-3" style="--glass-opacity: 0.92">
+            <flux:tabs variant="pills" class="hwk-pills" wire:model.live="aktiveTab">
+                <flux:tab name="lieferanten" icon="truck">Lieferanten</flux:tab>
+                <flux:tab name="kostenstellen" icon="banknotes">Kostenstellen</flux:tab>
+            </flux:tabs>
+        </div>
 
-        <flux:tab.panel name="lieferanten">
+        <flux:tab.panel name="lieferanten" class="glass-card overflow-hidden p-5">
             <div class="flex items-center gap-3 mb-3">
                 <flux:input wire:model.live.debounce.300ms="search" placeholder="Lieferant suchen…" class="flex-1" icon="magnifying-glass" />
                 <flux:button icon="arrow-path" wire:click="syncJetzt('lieferanten')" wire:loading.attr="disabled">Jetzt synchronisieren</flux:button>
@@ -100,7 +102,7 @@
             </flux:table>
         </flux:tab.panel>
 
-        <flux:tab.panel name="kostenstellen">
+        <flux:tab.panel name="kostenstellen" class="glass-card overflow-hidden p-5">
             <div class="flex flex-wrap items-center gap-3 mb-3">
                 <flux:input wire:model.live.debounce.300ms="search" placeholder="Kostenstelle suchen…" class="flex-1 min-w-56" icon="magnifying-glass" />
                 <flux:radio.group wire:model.live="kostenstellenStatus" variant="segmented" size="sm">

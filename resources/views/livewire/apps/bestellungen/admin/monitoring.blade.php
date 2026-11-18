@@ -1,5 +1,5 @@
 <div class="space-y-6">
-    <flux:card>
+    <section class="glass-card overflow-hidden p-5">
         <flux:heading size="lg" class="mb-3">D3-Suche</flux:heading>
         <div class="flex gap-3">
             <flux:input wire:model="d3SearchQuery" placeholder="Bestellnummer oder Bestellungs-ID" class="flex-1" />
@@ -7,21 +7,23 @@
         </div>
         @if ($d3SearchResults !== null)
             @if ($d3SearchResults->isEmpty())
-                <flux:text class="text-zinc-500 mt-3">Keine Treffer in D3.</flux:text>
+                <x-intranet-app-bestellungen::hwk-empty bare icon="magnifying-glass" title="Keine Treffer">
+                    Keine Treffer in D3.
+                </x-intranet-app-bestellungen::hwk-empty>
             @else
                 <ul class="mt-3 space-y-1 text-sm">
                     @foreach ($d3SearchResults as $item)
                         <li>
-                            <flux:badge color="sky" size="sm">{{ data_get($item, 'id') ?? data_get($item, 'documentId') }}</flux:badge>
+                            <flux:badge color="zinc" size="sm">{{ data_get($item, 'id') ?? data_get($item, 'documentId') }}</flux:badge>
                             {{ data_get($item, 'name') ?? json_encode($item) }}
                         </li>
                     @endforeach
                 </ul>
             @endif
         @endif
-    </flux:card>
+    </section>
 
-    <flux:card>
+    <section class="glass-card overflow-hidden p-5">
         <div class="flex items-center justify-between mb-3">
             <flux:heading size="lg">Bestellungen-Monitoring</flux:heading>
             <flux:input wire:model.live.debounce.300ms="search" placeholder="Bestellnummer, Lieferant oder D3-ID…" class="w-72" icon="magnifying-glass" />
@@ -41,7 +43,7 @@
                 @foreach ($bestellungen as $bestellung)
                     <flux:table.row :key="$bestellung->id">
                         <flux:table.cell>
-                            <a href="{{ route('apps.bestellungen.detail', $bestellung) }}" wire:navigate class="text-sky-600 hover:underline">
+                            <a href="{{ route('apps.bestellungen.detail', $bestellung) }}" wire:navigate class="text-[#073070] hover:underline dark:text-[#d0e3f9]">
                                 {{ $bestellung->nummer }}
                             </a>
                         </flux:table.cell>
@@ -84,5 +86,5 @@
             </flux:table.rows>
         </flux:table>
         <div class="mt-4">{{ $bestellungen->links() }}</div>
-    </flux:card>
+    </section>
 </div>

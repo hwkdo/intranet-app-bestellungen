@@ -1,37 +1,26 @@
 <div>
     <x-intranet-app-bestellungen::bestellungen-layout heading="Bestellungen suchen" subheading="BEN, Betreff, Projekt und Positionsbezeichnungen">
-        <div class="space-y-6">
-            <div class="space-y-2">
-                <flux:heading size="lg">Bestellungen durchsuchen</flux:heading>
-                <flux:text class="text-zinc-600 dark:text-zinc-400">
-                    Suche nach Bestellnummer (BEN), Betreff, Projektname oder Positionsbezeichnung.
-                </flux:text>
+        <div class="space-y-4">
+            <div class="glass-card sticky top-3 z-20 p-3" style="--glass-opacity: 0.92">
+                <flux:input
+                    wire:model.live.debounce.300ms="searchQuery"
+                    placeholder="BEN, Betreff, Projekt, Position…"
+                    icon="magnifying-glass"
+                    class="w-full"
+                    aria-label="Bestellungen durchsuchen"
+                />
             </div>
 
-            <flux:input
-                wire:model.live.debounce.300ms="searchQuery"
-                placeholder="BEN, Betreff, Projekt, Position…"
-                icon="magnifying-glass"
-                class="w-full"
-            />
-
-            @if (trim($searchQuery) !== '' && mb_strlen(trim($searchQuery)) < 2)
-                <flux:callout variant="info">
+            @if (trim($searchQuery) === '' || mb_strlen(trim($searchQuery)) < 2)
+                <x-intranet-app-bestellungen::hwk-empty icon="magnifying-glass" title="Suche starten">
                     Geben Sie mindestens 2 Zeichen ein, um die Suche zu starten.
-                </flux:callout>
-            @endif
-
-            @if (trim($searchQuery) !== '' && mb_strlen(trim($searchQuery)) >= 2)
-                <div class="flex items-center gap-2">
-                    <flux:heading size="md">Treffer</flux:heading>
-                    <flux:badge variant="outline">{{ $this->results->count() }}</flux:badge>
-                </div>
-
-                @if ($this->results->isEmpty())
-                    <flux:callout variant="info">
-                        Keine Bestellungen gefunden. Bitte einen anderen Suchbegriff versuchen.
-                    </flux:callout>
-                @else
+                </x-intranet-app-bestellungen::hwk-empty>
+            @elseif ($this->results->isEmpty())
+                <x-intranet-app-bestellungen::hwk-empty icon="magnifying-glass" title="Keine Treffer">
+                    Keine Bestellungen gefunden. Bitte einen anderen Suchbegriff versuchen.
+                </x-intranet-app-bestellungen::hwk-empty>
+            @else
+                <x-intranet-app-bestellungen::hwk-card title="Treffer" icon="magnifying-glass" :description="$this->results->count().' Bestellungen'">
                     <flux:table>
                         <flux:table.columns>
                             <flux:table.column>BEN</flux:table.column>
@@ -66,11 +55,7 @@
                             @endforeach
                         </flux:table.rows>
                     </flux:table>
-                @endif
-            @elseif (trim($searchQuery) === '')
-                <flux:callout variant="info">
-                    Geben Sie mindestens 2 Zeichen ein, um die Suche zu starten.
-                </flux:callout>
+                </x-intranet-app-bestellungen::hwk-card>
             @endif
         </div>
     </x-intranet-app-bestellungen::bestellungen-layout>

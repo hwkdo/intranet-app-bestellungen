@@ -23,7 +23,7 @@ enum BestellungStatus: string
         return match ($this) {
             self::Entwurf => 'zinc',
             self::ZurFreigabe, self::ZurZweitenFreigabe => 'amber',
-            self::Freigegeben => 'sky',
+            self::Freigegeben => 'lime',
             self::Bestellt => 'emerald',
             self::Abgelehnt => 'red',
         };

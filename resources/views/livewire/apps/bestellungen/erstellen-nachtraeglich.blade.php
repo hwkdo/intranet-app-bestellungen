@@ -9,7 +9,7 @@
             </flux:callout>
 
             @if ($kassenbonId === null)
-                <flux:card class="space-y-4">
+                <section class="glass-card overflow-hidden p-5 space-y-4">
                     <flux:heading size="lg">Kassenbon</flux:heading>
                     <flux:file-upload wire:model="kassenbonDatei" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp">
                         <flux:file-upload.dropzone
@@ -30,9 +30,9 @@
                         />
                     @endif
                     <flux:error name="kassenbonDatei" />
-                </flux:card>
+                </section>
             @elseif ($this->analyseLaeuft)
-                <flux:card class="space-y-5">
+                <section class="glass-card overflow-hidden p-5 space-y-5">
                     <div class="flex items-start justify-between gap-4">
                         <div>
                             <flux:heading size="lg">Kassenbon wird ausgewertet</flux:heading>
@@ -69,7 +69,7 @@
                                     @elseif ($schritt['zustand'] === 'aktiv')
                                         <flux:icon.arrow-path class="size-5 animate-spin" />
                                     @else
-                                        <span class="mt-0.5 block size-5 rounded-full border border-zinc-300 dark:border-zinc-600"></span>
+                                        <span class="mt-0.5 block size-5 rounded-full border border-zinc-300 dark:border-white/10"></span>
                                     @endif
                                 </div>
                                 <div>
@@ -87,13 +87,13 @@
                     <flux:text class="text-sm">
                         Meist ein bis zwei Minuten. Die Seite prüft alle zwei Sekunden von selbst, ob der nächste Schritt fertig ist.
                     </flux:text>
-                </flux:card>
+                </section>
             @elseif ($extractionStatus === 'failed')
                 <flux:callout icon="exclamation-circle" variant="danger">
                     {{ $extractionError ?: 'Die Auswertung ist fehlgeschlagen.' }}
                 </flux:callout>
             @elseif (! $auszahlungBestaetigt)
-                <flux:card class="mx-auto max-w-2xl space-y-6">
+                <section class="glass-card overflow-hidden p-5 mx-auto max-w-2xl space-y-6">
                     <div>
                         <flux:heading size="lg">Art der Aus-/Rückzahlung</flux:heading>
                         <flux:text class="mt-1">Wohin soll das Geld ausgezahlt werden?</flux:text>
@@ -117,10 +117,10 @@
                     <div class="flex justify-end">
                         <flux:button type="button" variant="primary" wire:click="auszahlungUebernehmen">Weiter zur Prüfung</flux:button>
                     </div>
-                </flux:card>
+                </section>
             @else
                 <div class="grid gap-6 lg:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
-                    <flux:card class="space-y-3">
+                    <section class="glass-card overflow-hidden p-5 space-y-3">
                         <flux:heading size="lg">Beleg</flux:heading>
                         <flux:button
                             class="w-full"
@@ -132,10 +132,10 @@
                         >
                             Kassenbon öffnen
                         </flux:button>
-                    </flux:card>
+                    </section>
 
                     <form wire:submit="abschliessen" class="space-y-6">
-                        <flux:card class="space-y-4">
+                        <section class="glass-card overflow-hidden p-5 space-y-4">
                             <flux:heading size="lg">Prüfung</flux:heading>
                             <flux:text>Bitte alle erkannten Angaben prüfen. Fehlendes ergänzen, Falsches korrigieren.</flux:text>
 
@@ -210,9 +210,9 @@
                                 </div>
                             </div>
                             <flux:error name="bruttobetrag" />
-                        </flux:card>
+                        </section>
 
-                        <flux:card>
+                        <section class="glass-card overflow-hidden p-5">
                             <div class="mb-4 flex items-center justify-between">
                                 <flux:heading size="lg">
                                     Positionen
@@ -224,7 +224,7 @@
                             </div>
                             <div class="overflow-x-auto">
                                 <table class="w-full text-sm">
-                                    <thead class="border-b border-zinc-200 text-xs tracking-wide text-zinc-600 uppercase dark:border-zinc-700 dark:text-white/70">
+                                    <thead class="border-b border-[#d0e3f9] text-xs tracking-wide text-zinc-600 uppercase dark:border-white/10 dark:text-white/70">
                                         <tr>
                                             <th class="w-10 py-2 pr-2 text-left">Nr.</th>
                                             <th class="px-2 py-2 text-left">Bezeichnung</th>
@@ -236,7 +236,7 @@
                                             <th class="w-10 py-2 pl-2"></th>
                                         </tr>
                                     </thead>
-                                    <tbody class="divide-y divide-zinc-100 dark:divide-zinc-800">
+                                    <tbody class="divide-y divide-[#d0e3f9] dark:divide-white/10">
                                         @foreach ($positionen as $index => $position)
                                             @php($zeilenSumme = (float) ($position['menge'] ?? 0) * (float) ($position['preis'] ?? 0))
                                             <tr wire:key="kb-pos-{{ $index }}" class="align-top">
@@ -286,9 +286,9 @@
                                 <flux:checkbox wire:model="summenAbweichungBestaetigt" label="Abweichung zwischen Positionen, Netto, Steuer und Brutto ist geprüft" />
                                 <flux:error name="summenAbweichungBestaetigt" />
                             @endif
-                        </flux:card>
+                        </section>
 
-                        <flux:card class="space-y-4">
+                        <section class="glass-card overflow-hidden p-5 space-y-4">
                             <flux:field>
                                 <flux:label>D3-Gruppen</flux:label>
                                 <flux:select wire:model.live="d3GruppenAuswahl" multiple variant="listbox">
@@ -305,7 +305,7 @@
                                     @endforeach
                                 </flux:select>
                             @endif
-                        </flux:card>
+                        </section>
 
                         <div class="flex justify-end">
                             <flux:button type="submit" variant="primary" icon="paper-airplane" wire:loading.attr="disabled" wire:target="abschliessen">

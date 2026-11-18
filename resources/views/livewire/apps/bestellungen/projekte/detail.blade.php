@@ -3,45 +3,57 @@
         :heading="$projekt->name"
         :subheading="$projekt->beschreibung ?? 'Projektübersicht'"
     >
-        {{-- Header-Aktionen --}}
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <flux:button variant="ghost" icon="arrow-left" :href="route('apps.bestellungen.projekte.index')" wire:navigate>
-                Alle Projekte
-            </flux:button>
-
-            <flux:button variant="primary" icon="plus" :href="route('apps.bestellungen.erstellen', ['projekt' => $projekt->id])" wire:navigate>
+        <x-slot:actions>
+            <a
+                href="{{ route('apps.bestellungen.erstellen', ['projekt' => $projekt->id]) }}"
+                wire:navigate
+                class="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#073070] shadow-md shadow-[#04214e]/20 transition hover:bg-[#d0e3f9]"
+            >
+                <flux:icon icon="plus" variant="micro" class="size-4" />
                 Bestellung erstellen
-            </flux:button>
+            </a>
+        </x-slot:actions>
+
+        <div class="mb-4">
+            <a
+                href="{{ route('apps.bestellungen.projekte.index') }}"
+                wire:navigate
+                class="inline-flex items-center gap-1.5 text-sm font-medium text-[#073070] hover:underline dark:text-[#d0e3f9]"
+            >
+                <flux:icon icon="arrow-left" variant="micro" class="size-4" />
+                Alle Projekte
+            </a>
         </div>
 
-        {{-- Kennzahlen --}}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <flux:card class="text-center">
-                <flux:heading size="xl">{{ $this->bestellungen->count() }}</flux:heading>
-                <flux:text class="text-zinc-500 text-sm mt-1">Bestellungen</flux:text>
-            </flux:card>
-            <flux:card class="text-center">
-                <flux:heading size="xl">{{ number_format($this->gesamtkosten, 2, ',', '.') }} €</flux:heading>
-                <flux:text class="text-zinc-500 text-sm mt-1">Gesamtkosten</flux:text>
-            </flux:card>
-            <flux:card class="text-center">
-                <flux:heading size="xl">{{ $projekt->mitglieder->count() + 1 }}</flux:heading>
-                <flux:text class="text-zinc-500 text-sm mt-1">Beteiligte</flux:text>
-            </flux:card>
-            <flux:card class="text-center">
-                <flux:heading size="lg" class="font-mono break-all">{{ $projekt->d3_projekt_id }}</flux:heading>
-                <flux:text class="text-zinc-500 text-sm mt-1">Projekt-ID (D3)</flux:text>
-            </flux:card>
+        <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <section class="glass-card overflow-hidden p-5 text-center">
+                <p class="text-2xl font-semibold text-[#073070] dark:text-white">{{ $this->bestellungen->count() }}</p>
+                <p class="mt-1 text-sm text-slate-600 dark:text-white/70">Bestellungen</p>
+            </section>
+            <section class="glass-card overflow-hidden p-5 text-center">
+                <p class="text-2xl font-semibold text-[#073070] dark:text-white">{{ number_format($this->gesamtkosten, 2, ',', '.') }} €</p>
+                <p class="mt-1 text-sm text-slate-600 dark:text-white/70">Gesamtkosten</p>
+            </section>
+            <section class="glass-card overflow-hidden p-5 text-center">
+                <p class="text-2xl font-semibold text-[#073070] dark:text-white">{{ $projekt->mitglieder->count() + 1 }}</p>
+                <p class="mt-1 text-sm text-slate-600 dark:text-white/70">Beteiligte</p>
+            </section>
         </div>
 
-        <flux:callout icon="information-circle" variant="secondary" class="mb-6">
-            Die Projekt-ID wird beim D3-Push aller Bestellscheine dieses Projekts gesetzt und verknüpft sie in D3.
-        </flux:callout>
+        <section class="glass-card mb-6 overflow-hidden px-5">
+            <div class="flex flex-col gap-1 border-b border-[#d0e3f9] py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 dark:border-white/10">
+                <span class="text-sm font-medium text-[#073070] dark:text-white">Projekt-ID (D3)</span>
+                <span class="font-mono text-sm break-words text-slate-600 sm:text-right dark:text-white/70">{{ $projekt->d3_projekt_id ?: '—' }}</span>
+            </div>
+            <p class="py-4 text-sm text-slate-600 dark:text-white/70">
+                Die Projekt-ID wird beim D3-Push aller Bestellscheine dieses Projekts gesetzt und verknüpft sie in D3.
+            </p>
+        </section>
 
         {{-- Begründung --}}
-        <flux:card class="mb-6">
+        <section class="glass-card overflow-hidden p-5 mb-6">
             <flux:heading size="lg" class="mb-3">Begründung</flux:heading>
-            <flux:text class="text-zinc-500 text-sm mb-3">
+            <flux:text class="mb-3 text-sm text-slate-600 dark:text-white/70">
                 Wird beim Erstellen einer Bestellung in diesem Projekt als Vorgabe in das Begründungsfeld übernommen und kann dort angepasst werden.
             </flux:text>
 
@@ -66,14 +78,16 @@
             @else
                 <div class="text-sm whitespace-pre-wrap">{{ $projekt->begruendung ?: '—' }}</div>
             @endif
-        </flux:card>
+        </section>
 
         {{-- Bestellungen --}}
-        <flux:card class="mb-6">
+        <section class="glass-card overflow-hidden p-5 mb-6">
             <flux:heading size="lg" class="mb-3">Bestellungen</flux:heading>
 
             @if ($this->bestellungen->isEmpty())
-                <flux:text class="text-zinc-500">Noch keine Bestellungen in diesem Projekt.</flux:text>
+                <x-intranet-app-bestellungen::hwk-empty bare icon="document-text" title="Keine Bestellungen">
+                    Noch keine Bestellungen in diesem Projekt.
+                </x-intranet-app-bestellungen::hwk-empty>
             @else
                 <flux:table>
                     <flux:table.columns>
@@ -109,18 +123,18 @@
                     </flux:table.rows>
                 </flux:table>
             @endif
-        </flux:card>
+        </section>
 
         {{-- Mitglieder --}}
-        <flux:card>
+        <section class="glass-card overflow-hidden p-5">
             <flux:heading size="lg" class="mb-3">Beteiligte</flux:heading>
 
-            <ul class="divide-y divide-zinc-100 dark:divide-zinc-800 mb-4">
+            <ul class="divide-y divide-[#d0e3f9] dark:divide-white/10 mb-4">
                 {{-- Ersteller --}}
                 <li class="flex items-center justify-between py-2">
                     <div>
                         <span class="font-medium">{{ optional($projekt->ersteller)->name }}</span>
-                        <flux:badge size="sm" color="blue" class="ml-2">Ersteller</flux:badge>
+                        <flux:badge size="sm" color="zinc" class="ml-2">Ersteller</flux:badge>
                     </div>
                 </li>
 
@@ -175,6 +189,6 @@
                     </flux:button>
                 </div>
             @endif
-        </flux:card>
+        </section>
     </x-intranet-app-bestellungen::bestellungen-layout>
 </div>

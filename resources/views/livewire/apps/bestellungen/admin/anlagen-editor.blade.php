@@ -1,11 +1,13 @@
 <div>
-    <div class="flex items-center justify-between mb-4">
-        <flux:heading size="lg">Anlagen</flux:heading>
-        <flux:button icon="plus" variant="primary" wire:click="neu">Neue Anlage</flux:button>
-    </div>
+    <x-intranet-app-bestellungen::hwk-card title="Anlagen" icon="paper-clip" description="Anlagen können einer Bestell-Art zugeordnet werden.">
+        <x-slot:actions>
+            <flux:button icon="plus" variant="primary" wire:click="neu">Neue Anlage</flux:button>
+        </x-slot:actions>
 
-    @if ($this->anlagen->isEmpty())
-        <flux:text class="text-zinc-500">Keine Anlagen definiert.</flux:text>
+        @if ($this->anlagen->isEmpty())
+            <x-intranet-app-bestellungen::hwk-empty bare icon="paper-clip" title="Keine Anlagen">
+                Keine Anlagen definiert.
+            </x-intranet-app-bestellungen::hwk-empty>
     @else
         <flux:table>
             <flux:table.columns>
@@ -35,6 +37,7 @@
             </flux:table.rows>
         </flux:table>
     @endif
+    </x-intranet-app-bestellungen::hwk-card>
 
     <flux:modal name="anlage-modal" :show="false">
         <form wire:submit="speichern" class="space-y-3">

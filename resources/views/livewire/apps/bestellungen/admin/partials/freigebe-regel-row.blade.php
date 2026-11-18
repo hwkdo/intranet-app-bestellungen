@@ -3,7 +3,7 @@
     $removeFn = "removeFreigabe{$freigabeNr}Regel({$stufenIdx}, {$regelIdx})";
 @endphp
 
-<div class="flex flex-wrap items-end gap-2 rounded-lg bg-zinc-50 p-2 dark:bg-zinc-800" wire:key="regel-{{ $stufenIdx }}-{{ $freigabeNr }}-{{ $regelIdx }}">
+<div class="flex flex-wrap items-end gap-2 rounded-lg bg-[#d0e3f9]/30 p-2 dark:bg-white/10" wire:key="regel-{{ $stufenIdx }}-{{ $freigabeNr }}-{{ $regelIdx }}">
     {{-- Typ --}}
     <flux:field class="min-w-32">
         <flux:label>Typ</flux:label>

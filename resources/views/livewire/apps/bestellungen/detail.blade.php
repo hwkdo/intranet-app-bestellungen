@@ -9,13 +9,13 @@
             :class="stammdatenOffen ? 'lg:grid-cols-3' : 'grid-cols-1'"
         >
             <div class="min-w-0" :class="stammdatenOffen ? 'lg:col-span-2' : ''">
-            <flux:card>
+            <section class="glass-card overflow-hidden p-5">
                 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                     <div class="flex items-center gap-3">
                         <flux:badge :color="$bestellung->status?->color()">
                             {{ $bestellung->status?->label() }}
                         </flux:badge>
-                        <flux:text class="text-zinc-500">{{ $bestellung->nummer }}</flux:text>
+                        <flux:text class="text-slate-600 dark:text-white/70">{{ $bestellung->nummer }}</flux:text>
                         @if ($bestellung->istInD3())
                             @if ($this->d3OneUrl())
                                 <a
@@ -24,10 +24,10 @@
                                     rel="noopener noreferrer"
                                     class="inline-flex"
                                 >
-                                    <flux:badge color="sky" icon="cloud">in D3</flux:badge>
+                                    <flux:badge color="zinc" icon="cloud">in D3</flux:badge>
                                 </a>
                             @else
-                                <flux:badge color="sky" icon="cloud">in D3</flux:badge>
+                                <flux:badge color="zinc" icon="cloud">in D3</flux:badge>
                             @endif
                         @endif
                     </div>
@@ -88,7 +88,7 @@
                 </div>
 
                 @if ($bestellung->kassenbon)
-                    <flux:card class="mb-4 space-y-3">
+                    <section class="glass-card overflow-hidden p-5 mb-4 space-y-3">
                         <flux:heading size="lg">Kassenbon</flux:heading>
                         <flux:text>
                             Beleg {{ $bestellung->kassenbon->belegnummer ?: '0' }}
@@ -109,7 +109,7 @@
                                 </flux:button>
                             @endif
                         </div>
-                    </flux:card>
+                    </section>
                 @endif
 
                 <button
@@ -117,11 +117,11 @@
                     x-show="! stammdatenOffen"
                     x-cloak
                     x-on:click="stammdatenOffen = true"
-                    class="mb-4 flex w-full items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-start transition hover:bg-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-400 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                    class="mb-4 flex w-full items-center gap-3 rounded-xl border border-[#d0e3f9] bg-white px-3 py-2 text-start transition hover:bg-[#d0e3f9]/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#073070] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
                 >
-                    <flux:icon.identification variant="mini" class="shrink-0 text-zinc-500 dark:text-white/70" />
-                    <span class="shrink-0 font-medium text-zinc-800 dark:text-white">Stammdaten</span>
-                    <span class="min-w-0 flex-1 truncate text-sm text-zinc-500 dark:text-white/60">
+                    <flux:icon.identification variant="mini" class="shrink-0 text-[#073070] dark:text-white" />
+                    <span class="shrink-0 font-medium text-[#073070] dark:text-white">Stammdaten</span>
+                    <span class="min-w-0 flex-1 truncate text-sm text-slate-600 dark:text-white/70">
                         @if ($bestellung->istIntern() && $bestellung->internerEmpfaenger)
                             {{ $bestellung->internerEmpfaenger->vorname }} {{ $bestellung->internerEmpfaenger->nachname }}
                         @elseif ($bestellung->istAuftragsvergabe() && ! filled($bestellung->lieferantenname))
@@ -134,14 +134,15 @@
                             · {{ $bestellung->kostenstelle }}
                         @endif
                     </span>
-                    <span class="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-zinc-800 dark:text-white/80">
+                    <span class="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-[#073070] dark:text-white">
                         Anzeigen
                         <flux:icon.chevron-right variant="mini" />
                     </span>
                 </button>
 
                 <flux:tab.group>
-                    <flux:tabs wire:model.live="activeTab">
+                    <div class="mb-4">
+                    <flux:tabs variant="pills" class="hwk-pills" wire:model.live="activeTab">
                         @if ($bestellung->istAuftragsvergabe())
                             <flux:tab name="auftrag" icon="document-check">Auftragszeilen</flux:tab>
                         @else
@@ -152,6 +153,7 @@
                         <flux:tab name="notizen" icon="chat-bubble-left-ellipsis">Notizen</flux:tab>
                         <flux:tab name="verlauf" icon="clock">Verlauf</flux:tab>
                     </flux:tabs>
+                    </div>
 
                     <flux:tab.panel name="positionen">
                         <div class="mb-3 flex justify-end">
@@ -165,7 +167,7 @@
                         @if ($this->positionenBearbeiten)
                             <div class="space-y-3">
                                 @foreach ($positionenDraft as $idx => $position)
-                                    <div wire:key="pos-draft-{{ $idx }}" class="grid gap-3 md:grid-cols-12 items-end rounded border border-zinc-200 p-3 dark:border-zinc-700">
+                                    <div wire:key="pos-draft-{{ $idx }}" class="grid gap-3 md:grid-cols-12 items-end rounded border border-[#d0e3f9] p-3 dark:border-white/10">
                                         <div class="md:col-span-4">
                                             <flux:input wire:model.blur="positionenDraft.{{ $idx }}.bezeichnung" label="Bezeichnung" />
                                             <flux:error name="positionenDraft.{{ $idx }}.bezeichnung" />
@@ -246,7 +248,7 @@
                                                     <a href="{{ $pos->getFirstMediaUrl('position_pdf') }}" target="_blank" class="inline-flex items-start gap-2">
                                                         <iframe
                                                             src="{{ $pos->getFirstMediaUrl('position_pdf') }}#toolbar=0&navpanes=0&scrollbar=0"
-                                                            class="h-12 w-16 rounded border border-zinc-200 dark:border-zinc-700"
+                                                            class="h-12 w-16 rounded border border-[#d0e3f9] dark:border-white/10"
                                                             title="PDF Vorschau Position {{ $pos->nr }}"
                                                         ></iframe>
                                                         <span class="text-xs text-zinc-500">Öffnen</span>
@@ -342,7 +344,9 @@
                         @endif
 
                         @if ($bestellung->angebote->isEmpty())
-                            <flux:text class="text-zinc-500">{{ $bestellung->istAuftragsvergabe() ? 'Keine Angebote erfasst.' : 'Keine Angebote oder Begründungen erfasst.' }}</flux:text>
+                            <x-intranet-app-bestellungen::hwk-empty bare icon="document-text" title="Keine Angebote">
+                                {{ $bestellung->istAuftragsvergabe() ? 'Keine Angebote erfasst.' : 'Keine Angebote oder Begründungen erfasst.' }}
+                            </x-intranet-app-bestellungen::hwk-empty>
                         @else
                             <flux:table class="w-full">
                                 <colgroup>
@@ -384,7 +388,7 @@
                                                         </flux:tooltip>
                                                     @else
                                                         <flux:tooltip content="Angebot">
-                                                            <flux:icon.document-text variant="mini" class="text-sky-600 dark:text-sky-400" />
+                                                            <flux:icon.document-text variant="mini" class="text-[#073070] dark:text-[#d0e3f9]" />
                                                         </flux:tooltip>
                                                     @endif
                                                 </flux:table.cell>
@@ -497,7 +501,9 @@
                             @endif
 
                             @if ($d3DokumenteGeladen && empty($d3Dokumente))
-                                <flux:text class="text-zinc-500">Keine D3-Dokumente zur BEN gefunden.</flux:text>
+                                <x-intranet-app-bestellungen::hwk-empty bare icon="cloud" title="Keine Dokumente">
+                                    Keine D3-Dokumente zur BEN gefunden.
+                                </x-intranet-app-bestellungen::hwk-empty>
                             @endif
 
                             @if (! empty($d3Dokumente))
@@ -513,7 +519,7 @@
                                                 <flux:table.cell>{{ $doc['art'] }}</flux:table.cell>
                                                 <flux:table.cell>
                                                     @if (! empty($doc['url']))
-                                                        <a href="{{ $doc['url'] }}" target="_blank" rel="noopener noreferrer" class="text-sky-600 hover:underline">
+                                                        <a href="{{ $doc['url'] }}" target="_blank" rel="noopener noreferrer" class="text-[#073070] hover:underline dark:text-[#d0e3f9]">
                                                             {{ $doc['id'] }}
                                                         </a>
                                                     @else
@@ -536,7 +542,9 @@
                         </form>
 
                         @if ($bestellung->notizen->isEmpty())
-                            <flux:text class="text-zinc-500">Noch keine Notizen.</flux:text>
+                            <x-intranet-app-bestellungen::hwk-empty bare icon="chat-bubble-left-ellipsis" title="Keine Notizen">
+                                Noch keine Notizen.
+                            </x-intranet-app-bestellungen::hwk-empty>
                         @else
                             <ul class="space-y-3">
                                 @foreach ($bestellung->notizen as $notiz)
@@ -557,12 +565,14 @@
 
                     <flux:tab.panel name="verlauf">
                         @if ($bestellung->aktionen->isEmpty())
-                            <flux:text class="text-zinc-500">Noch keine Aktivitäten.</flux:text>
+                            <x-intranet-app-bestellungen::hwk-empty bare icon="clock" title="Keine Aktivitäten">
+                                Noch keine Aktivitäten.
+                            </x-intranet-app-bestellungen::hwk-empty>
                         @else
-                            <ol class="relative border-l-2 border-zinc-200 dark:border-zinc-700 ml-4 space-y-4">
+                            <ol class="relative border-l-2 border-[#d0e3f9] dark:border-white/10 ml-4 space-y-4">
                                 @foreach ($bestellung->aktionen as $aktion)
                                     <li wire:key="aktion-{{ $aktion->id }}" class="ml-4">
-                                        <span class="absolute -left-2 mt-1 h-3 w-3 rounded-full bg-sky-500"></span>
+                                        <span class="absolute -left-2 mt-1 h-3 w-3 rounded-full bg-[#073070]"></span>
                                         <div class="text-sm text-zinc-500">{{ $aktion->created_at?->format('d.m.Y H:i') }}</div>
                                         <div class="font-medium">{{ $aktion->typ?->label() ?? $aktion->typ }}</div>
                                         @if ($aktion->user)
@@ -577,26 +587,26 @@
                         @endif
                     </flux:tab.panel>
                 </flux:tab.group>
-            </flux:card>
+            </section>
             </div>
 
             <div x-show="stammdatenOffen" x-cloak>
-            <flux:card>
+            <section class="glass-card overflow-hidden p-5">
                 <div class="mb-3 flex items-center justify-between gap-2">
                     <flux:heading size="lg">Stammdaten</flux:heading>
                     <flux:button size="sm" variant="ghost" icon="chevron-right" x-on:click="stammdatenOffen = false">
                         Ausblenden
                     </flux:button>
                 </div>
-                <dl class="space-y-2 text-sm">
+                <dl class="hwk-rows divide-y divide-[#d0e3f9] dark:divide-white/10">
                     @if ($bestellung->projekt)
                         <div>
-                            <dt class="text-zinc-500">Projekt</dt>
+                            <dt>Projekt</dt>
                             <dd>
                                 <a
                                     href="{{ route('apps.bestellungen.projekte.detail', $bestellung->projekt) }}"
                                     wire:navigate
-                                    class="text-blue-600 hover:underline dark:text-blue-400"
+                                    class="text-[#073070] hover:underline dark:text-[#d0e3f9]"
                                 >
                                     {{ $bestellung->projekt->name }}
                                 </a>
@@ -604,17 +614,17 @@
                         </div>
                     @endif
                     <div>
-                        <dt class="text-zinc-500">Art</dt>
+                        <dt>Art</dt>
                         <dd>{{ $bestellung->typ?->label() ?? $bestellung->typ }}</dd>
                     </div>
                     @if ($bestellung->istIntern() && $bestellung->internerEmpfaenger)
                         <div>
-                            <dt class="text-zinc-500">Interner Empfänger</dt>
+                            <dt>Interner Empfänger</dt>
                             <dd>{{ $bestellung->internerEmpfaenger->vorname }} {{ $bestellung->internerEmpfaenger->nachname }}</dd>
                         </div>
                     @endif
                     <div>
-                        <dt class="text-zinc-500">{{ $bestellung->istAuftragsvergabe() ? 'Auftragnehmer' : 'Lieferant' }}{{ $bestellung->benoetigtFinalenLieferantenVorD3() ? ' (vorläufig)' : '' }}</dt>
+                        <dt>{{ $bestellung->istAuftragsvergabe() ? 'Auftragnehmer' : 'Lieferant' }}{{ $bestellung->benoetigtFinalenLieferantenVorD3() ? ' (vorläufig)' : '' }}</dt>
                         <dd>
                             @if ($bestellung->istAuftragsvergabe() && ! filled($bestellung->lieferantenname))
                                 Wird mit dem gewählten Angebot festgelegt
@@ -624,19 +634,19 @@
                         </dd>
                     </div>
                     <div>
-                        <dt class="text-zinc-500">Kostenstelle</dt>
+                        <dt>Kostenstelle</dt>
                         <dd>{{ $bestellung->kostenstelle }}</dd>
                     </div>
                     <div>
-                        <dt class="text-zinc-500">Haushaltsjahr</dt>
+                        <dt>Haushaltsjahr</dt>
                         <dd>{{ $bestellung->haushaltsjahr }}</dd>
                     </div>
                     <div>
-                        <dt class="text-zinc-500">Ersteller</dt>
+                        <dt>Ersteller</dt>
                         <dd>{{ optional($bestellung->user)->name }}</dd>
                     </div>
                     <div>
-                        <dt class="text-zinc-500">Aktueller Freigeber</dt>
+                        <dt>Aktueller Freigeber</dt>
                         @php($aktuelleFreigeber = $this->aktuelleFreigeberNamen())
                         @if ($aktuelleFreigeber !== [])
                             <dd>{{ implode(', ', $aktuelleFreigeber) }}</dd>
@@ -647,25 +657,25 @@
                         @endif
                     </div>
                     <div>
-                        <dt class="text-zinc-500">Besteller</dt>
+                        <dt>Besteller</dt>
                         <dd>{{ optional($bestellung->besteller)->name ?? optional($bestellung->user)->name ?? '—' }}</dd>
                     </div>
                     <div>
-                        <dt class="text-zinc-500">{{ $bestellung->istAuftragsvergabe() ? 'Gesamtbetrag (netto)' : 'Gesamtbetrag' }}</dt>
+                        <dt>{{ $bestellung->istAuftragsvergabe() ? 'Gesamtbetrag (netto)' : 'Gesamtbetrag' }}</dt>
                         <dd class="text-lg font-semibold text-emerald-600">
                             {{ number_format((float) $bestellung->gesamtbetrag, 2, ',', '.') }} €
                         </dd>
                     </div>
                     @if ($bestellung->d3id)
                         <div>
-                            <dt class="text-zinc-500">D3-ID</dt>
+                            <dt>D3-ID</dt>
                             <dd>
                                 @if ($this->d3OneUrl())
                                     <a
                                         href="{{ $this->d3OneUrl() }}"
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        class="text-sky-600 hover:underline"
+                                        class="text-[#073070] hover:underline dark:text-[#d0e3f9]"
                                     >
                                         {{ $bestellung->d3id }}
                                     </a>
@@ -677,7 +687,7 @@
                     @endif
                     @if ($bestellung->wiederholt_von_id)
                         <div>
-                            <dt class="text-zinc-500">Erstellt aus Vorlage</dt>
+                            <dt>Erstellt aus Vorlage</dt>
                             <dd>{{ optional($bestellung->vorlage)->nummer }}</dd>
                         </div>
                     @endif
@@ -707,7 +717,7 @@
                         </tbody>
                     </table>
                 @endif
-            </flux:card>
+            </section>
             </div>
         </div>
 
@@ -873,13 +883,13 @@
             </flux:text>
 
             @if ($this->waehlbareAngebote->isEmpty())
-                <flux:callout icon="information-circle" variant="secondary">
+                <x-intranet-app-bestellungen::hwk-empty bare icon="document-text" title="Keine freien Angebote">
                     Es liegen keine freien Angebote vor. Laden Sie zuerst ein Angebot hoch oder erfassen Sie eine Zeile manuell.
-                </flux:callout>
+                </x-intranet-app-bestellungen::hwk-empty>
             @else
                 <div class="max-h-96 space-y-2 overflow-y-auto">
                     @foreach ($this->waehlbareAngebote as $angebot)
-                        <label wire:key="wahl-angebot-{{ $angebot->id }}" class="flex gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700 {{ $angebot->angabenVollstaendig() ? 'cursor-pointer' : 'opacity-80' }}">
+                        <label wire:key="wahl-angebot-{{ $angebot->id }}" class="flex gap-3 rounded-lg border border-[#d0e3f9] p-3 dark:border-white/10 {{ $angebot->angabenVollstaendig() ? 'cursor-pointer' : 'opacity-80' }}">
                             <flux:checkbox
                                 wire:model="ausgewaehlteAngebotIds"
                                 value="{{ $angebot->id }}"

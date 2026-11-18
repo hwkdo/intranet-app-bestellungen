@@ -1,9 +1,11 @@
 <div>
     <x-intranet-app-bestellungen::bestellungen-layout heading="Freigaben" subheading="Bestellungen, die auf Ihre Entscheidung warten">
-        <flux:card>
-            @if ($bestellungen->isEmpty())
-                <flux:text class="text-zinc-500">Aktuell sind keine Bestellungen für Sie zur Freigabe offen.</flux:text>
-            @else
+        @if ($bestellungen->isEmpty())
+            <x-intranet-app-bestellungen::hwk-empty icon="check-badge" title="Keine offenen Freigaben">
+                Aktuell sind keine Bestellungen für Sie zur Freigabe offen.
+            </x-intranet-app-bestellungen::hwk-empty>
+        @else
+            <x-intranet-app-bestellungen::hwk-card title="Offene Freigaben" icon="check-badge" description="Prüfen Sie die Bestellung und entscheiden Sie anschließend.">
                 <flux:table>
                     <flux:table.columns>
                         <flux:table.column>BEN</flux:table.column>
@@ -41,7 +43,7 @@
                         @endforeach
                     </flux:table.rows>
                 </flux:table>
-            @endif
-        </flux:card>
+            </x-intranet-app-bestellungen::hwk-card>
+        @endif
     </x-intranet-app-bestellungen::bestellungen-layout>
 </div>

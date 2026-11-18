@@ -63,7 +63,7 @@ new class extends Component
 ?>
 
 @placeholder
-    <flux:card class="h-full">
+    <section class="glass-card overflow-hidden p-5 h-full">
         <div class="mb-3 space-y-2">
             <flux:skeleton class="h-4 w-52" />
             <flux:skeleton class="h-3 w-72" />
@@ -73,7 +73,7 @@ new class extends Component
             <flux:skeleton class="h-14 w-full rounded-md" />
             <flux:skeleton class="h-14 w-full rounded-md" />
         </div>
-    </flux:card>
+    </section>
 @endplaceholder
 
 <x-intranet-app-base::dashboard.widget-card
@@ -85,7 +85,7 @@ new class extends Component
             href="{{ route('apps.bestellungen.detail', $bestellung) }}"
             wire:key="bestellungen-offene-{{ $bestellung->id }}"
             wire:navigate
-            class="group block cursor-pointer rounded-md border border-zinc-200 px-3 py-2 transition-colors duration-150 hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800/40 dark:hover:bg-white/15"
+            class="group block cursor-pointer rounded-xl border border-[#d0e3f9] px-3 py-2 transition-colors duration-150 hover:bg-[#d0e3f9]/80 dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/15"
         >
             <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 font-medium group-hover:text-zinc-900 dark:group-hover:text-white">
@@ -103,7 +103,7 @@ new class extends Component
             </div>
         </a>
     @empty
-        <flux:text class="text-zinc-500 dark:text-white">Keine Bestellungen in Bearbeitung.</flux:text>
+        <p class="text-sm text-slate-600 dark:text-white/70">Keine Bestellungen in Bearbeitung.</p>
     @endforelse
 
     @if($this->hasMore)

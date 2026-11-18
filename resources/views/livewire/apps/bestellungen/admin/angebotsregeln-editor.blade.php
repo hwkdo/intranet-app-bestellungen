@@ -6,11 +6,13 @@
         </div>
 
         @if (empty($regeln))
-            <flux:callout icon="information-circle">Keine Regel definiert – es werden keine Angebote verlangt.</flux:callout>
+            <x-intranet-app-bestellungen::hwk-empty icon="check-badge" title="Keine Regel">
+                Keine Regel definiert – es werden keine Angebote verlangt.
+            </x-intranet-app-bestellungen::hwk-empty>
         @else
             <div class="space-y-3">
                 @foreach ($regeln as $idx => $regel)
-                    <flux:card wire:key="regel-{{ $idx }}">
+                    <section class="glass-card overflow-hidden p-5" wire:key="regel-{{ $idx }}">
                         <div class="grid gap-3 md:grid-cols-4">
                             <flux:input
                                 wire:model="regeln.{{ $idx }}.abBetrag"
@@ -46,7 +48,7 @@
                                 class="md:col-span-4"
                             />
                         </div>
-                    </flux:card>
+                    </section>
                 @endforeach
             </div>
         @endif
