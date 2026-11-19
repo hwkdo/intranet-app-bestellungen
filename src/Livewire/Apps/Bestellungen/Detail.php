@@ -373,6 +373,48 @@ class Detail extends Component
             && in_array($this->bestellung->status, [BestellungStatus::Entwurf, BestellungStatus::Abgelehnt], true);
     }
 
+    public function kannLoeschen(): bool
+    {
+        $user = Auth::user();
+
+        return $user !== null
+            && (int) $this->bestellung->user_id === (int) $user->getAuthIdentifier()
+            && $this->bestellung->status === BestellungStatus::Entwurf;
+    }
+
+    public function loeschen(): void
+    {
+        if (! $this->kannLoeschen()) {
+            return;
+        }
+
+        $user = Auth::user();
+        if (! $user instanceof User) {
+            return;
+        }
+
+        $nummer = $this->bestellung->nummer;
+
+        DB::transaction(function () use ($user): void {
+            app(BestellungWorkflow::class)->logAktion(
+                $this->bestellung,
+                $user,
+                AktionTyp::Geloescht,
+                'Entwurf gelöscht.',
+            );
+            $this->bestellung->kassenbon()->update(['bestellung_id' => null]);
+            $this->bestellung->delete();
+        });
+
+        Flux::toast(
+            heading: 'Entwurf gelöscht',
+            text: 'Die Bestellung '.$nummer.' wurde gelöscht.',
+            variant: 'success',
+        );
+
+        $this->redirectRoute('apps.bestellungen.meine', navigate: true);
+    }
+
     public function kannEinreichen(): bool
     {
         if ($this->bestellung->istNachtraeglich()) {

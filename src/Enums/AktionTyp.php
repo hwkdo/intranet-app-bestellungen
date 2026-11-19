@@ -27,6 +27,7 @@ enum AktionTyp: string
     case AuftragszeileGeaendert = 'auftragszeile_geaendert';
     case AuftragszeileEntfernt = 'auftragszeile_entfernt';
     case NachtraeglichErfasst = 'nachtraeglich_erfasst';
+    case Geloescht = 'geloescht';
 
     public function label(): string
     {
@@ -52,6 +53,7 @@ enum AktionTyp: string
             self::AuftragszeileGeaendert => 'Auftragszeile geändert',
             self::AuftragszeileEntfernt => 'Auftragszeile entfernt',
             self::NachtraeglichErfasst => 'Nachträgliche Bestellung erfasst',
+            self::Geloescht => 'Gelöscht',
         };
     }
 }

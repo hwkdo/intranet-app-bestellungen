@@ -48,6 +48,17 @@
                                 @endforeach
                             </flux:menu>
                         </flux:dropdown>
+                        @if ($this->kannLoeschen())
+                            <flux:button
+                                size="sm"
+                                variant="danger"
+                                icon="trash"
+                                wire:click="loeschen"
+                                wire:confirm="Möchten Sie diesen Entwurf wirklich löschen? Die Bestellung wird aus Ihren Listen entfernt."
+                            >
+                                Löschen
+                            </flux:button>
+                        @endif
                         <flux:button size="sm" variant="ghost" icon="document-duplicate" wire:click="wiederholen">
                             Wiederholen
                         </flux:button>
