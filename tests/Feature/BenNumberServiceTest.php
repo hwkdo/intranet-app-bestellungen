@@ -29,6 +29,29 @@ it('erzeugt BEN-Nummern im Legacy-Format <Praefix><HwkdoNummer><JJ><NNN>', funct
     expect($next)->toBe('3'.'1234'.'26'.'001');
 });
 
+it('vergibt keine Nummer erneut, die an einer soft-gelöschten Bestellung hängt', function (): void {
+    $user = User::factory()->create([
+        'username' => 'hwkdo1234',
+    ]);
+
+    Bestellung::factory()->create([
+        'nummer' => '3123426003',
+        'haushaltsjahr' => 2026,
+        'user_id' => $user->id,
+    ]);
+
+    $geloescht = Bestellung::factory()->create([
+        'nummer' => '3123426009',
+        'haushaltsjahr' => 2026,
+        'user_id' => $user->id,
+    ]);
+    $geloescht->delete();
+
+    $next = makeBenService()->next($user, 2026);
+
+    expect($next)->toBe('3'.'1234'.'26'.'010');
+});
+
 it('erhöht laufende Nummer pro User und Haushaltsjahr', function (): void {
     $user = User::factory()->create([
         'username' => 'hwkdo1234',

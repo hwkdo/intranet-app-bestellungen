@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Hwkdo\IntranetAppBestellungen\Http\Controllers\AngebotPdfController;
 use Hwkdo\IntranetAppBestellungen\Http\Controllers\KassenbonDateiController;
+use Hwkdo\IntranetAppBestellungen\Http\Controllers\LieferantenCacheErneuernController;
 use Hwkdo\IntranetAppBestellungen\Http\Controllers\PdfController;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Detail;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Erstellen;
@@ -17,6 +18,14 @@ use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Meine;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Search;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Settings\Notifications;
 use Illuminate\Support\Facades\Route;
+
+Route::middleware(['web', 'signed', 'throttle:10,1'])->group(function (): void {
+    Route::get('apps/bestellungen/lieferanten-cache/erneuern', [LieferantenCacheErneuernController::class, 'show'])
+        ->name('apps.bestellungen.lieferanten-cache.erneuern');
+
+    Route::post('apps/bestellungen/lieferanten-cache/erneuern', [LieferantenCacheErneuernController::class, 'store'])
+        ->name('apps.bestellungen.lieferanten-cache.erneuern.store');
+});
 
 Route::middleware(['web', 'auth', 'can:see-app-bestellungen'])->group(function (): void {
     Route::get('apps/bestellungen', Index::class)

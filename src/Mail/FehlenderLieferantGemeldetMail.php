@@ -12,6 +12,7 @@ use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\URL;
 
 class FehlenderLieferantGemeldetMail extends Mailable implements ShouldQueue
 {
@@ -55,6 +56,14 @@ class FehlenderLieferantGemeldetMail extends Mailable implements ShouldQueue
                 'standort' => $this->melder->standort?->name ?? '—',
                 'raum' => filled($this->melder->raum) ? (string) $this->melder->raum : '—',
                 'telefon' => filled($this->melder->telefon) ? (string) $this->melder->telefon : '—',
+                'cacheErneuernUrl' => URL::temporarySignedRoute(
+                    'apps.bestellungen.lieferanten-cache.erneuern',
+                    now()->addDays(30),
+                    [
+                        'melder' => $this->melder->getKey(),
+                        'lieferant' => $this->lieferantName,
+                    ],
+                ),
             ],
         );
     }

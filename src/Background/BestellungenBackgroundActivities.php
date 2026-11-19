@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Background;
 
 use Hwkdo\IntranetAppBase\Data\BackgroundActivityDefinition;
+use Hwkdo\IntranetAppBase\Data\BackgroundActivityFrequency;
+use Hwkdo\IntranetAppBase\Enums\BackgroundActivityCadence;
+use Hwkdo\IntranetAppBestellungen\Commands\SyncLieferantenCacheCommand;
 use Hwkdo\IntranetAppBestellungen\IntranetAppBestellungen;
 use Hwkdo\IntranetAppBestellungen\Jobs\ExtractAngebotMetadataJob;
 use Hwkdo\IntranetAppBestellungen\Jobs\ExtractKassenbonJob;
@@ -13,6 +16,8 @@ use Hwkdo\IntranetAppBestellungen\Mail\FehlenderLieferantGemeldetMail;
 
 final class BestellungenBackgroundActivities
 {
+    public const LIEFERANTEN_CACHE = 'bestellungen.lieferanten-cache';
+
     /**
      * @return list<BackgroundActivityDefinition>
      */
@@ -22,6 +27,19 @@ final class BestellungenBackgroundActivities
         $name = IntranetAppBestellungen::app_name();
 
         return [
+            BackgroundActivityDefinition::scheduled(
+                key: self::LIEFERANTEN_CACHE,
+                label: 'Lieferanten-Cache',
+                appIdentifier: $id,
+                appName: $name,
+                command: SyncLieferantenCacheCommand::COMMAND,
+                frequency: BackgroundActivityFrequency::dailyAt('02:15'),
+                description: 'Übernimmt Lieferanten aus der BÜ in den lokalen Cache.',
+                allowedCadences: BackgroundActivityCadence::cases(),
+                withoutOverlappingMinutes: 60,
+                runInBackground: true,
+                sort: 5,
+            ),
             BackgroundActivityDefinition::queued(key: 'bestellungen.push-d3', label: 'Bestellschein nach D3', appIdentifier: $id, appName: $name, job: PushBestellscheinToD3Job::class, sort: 10),
             BackgroundActivityDefinition::queued(key: 'bestellungen.angebot-metadata', label: 'Angebotsmetadaten', appIdentifier: $id, appName: $name, job: ExtractAngebotMetadataJob::class, sort: 20),
             BackgroundActivityDefinition::queued(key: 'bestellungen.kassenbon-metadata', label: 'Kassenbon auswerten', appIdentifier: $id, appName: $name, job: ExtractKassenbonJob::class, sort: 25),

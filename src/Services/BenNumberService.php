@@ -26,8 +26,9 @@ class BenNumberService
      * - NNN: dreistellige laufende Nummer pro User und Haushaltsjahr (001, 002, …)
      *
      * Die nächste Sequenznummer wird systemübergreifend ermittelt: Es wird das Maximum
-     * aus dem lokalen Zähler (neue DB) und dem höchsten Legacy-Wert verwendet,
-     * damit BEN-Nummern zwischen neuem und Legacy-Intranet eindeutig bleiben.
+     * aus dem lokalen Zähler (neue DB, inklusive soft-gelöschter Bestellungen) und
+     * dem höchsten Legacy-Wert verwendet, damit BEN-Nummern eindeutig bleiben.
+     * Soft-gelöschte Nummern bleiben durch den Unique-Index belegt.
      *
      * Beispiel: "3" + "1234" + "26" + "001" => "312342601"
      */
@@ -45,7 +46,7 @@ class BenNumberService
         return DB::transaction(function () use ($user, $jahr, $jahrKurz, $praefix, $hwkdoNummer, $legacyMax): string {
             $prefixUserJahr = $praefix.$hwkdoNummer.$jahrKurz;
 
-            $localMax = Bestellung::query()
+            $localMax = Bestellung::withTrashed()
                 ->where('user_id', $user->id)
                 ->where('haushaltsjahr', $jahr)
                 ->where('nummer', 'like', $prefixUserJahr.'%')

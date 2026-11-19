@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Hwkdo\IntranetAppBestellungen;
 
+use Hwkdo\IntranetAppBestellungen\Commands\SyncLieferantenCacheCommand;
 use Hwkdo\IntranetAppBestellungen\Commands\SyncLieferantenNutzungCommand;
 use Hwkdo\IntranetAppBestellungen\Commands\SyncStammdatenCommand;
 use Hwkdo\IntranetAppBestellungen\Models\Aktion;
@@ -30,6 +31,7 @@ class IntranetAppBestellungenServiceProvider extends PackageServiceProvider
             ->hasViews()
             ->discoversMigrations()
             ->hasCommand(SyncStammdatenCommand::class)
+            ->hasCommand(SyncLieferantenCacheCommand::class)
             ->hasCommand(SyncLieferantenNutzungCommand::class);
     }
 

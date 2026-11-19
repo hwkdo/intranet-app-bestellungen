@@ -138,6 +138,16 @@ class IntranetAppBestellungen implements IntranetAppInterface, ProvidesBackgroun
                 mandatory: true,
                 defaultChannels: ['inbox', 'mail'],
             ),
+            new NotificationTypeDefinition(
+                key: 'bestellungen.supplier_cache_updated',
+                label: 'Lieferanten-Cache aktualisiert',
+                appIdentifier: self::identifier(),
+                appName: self::app_name(),
+                description: 'Das Rechnungswesen hat den Lieferanten-Cache nach Ihrer Meldung aktualisiert.',
+                mandatory: true,
+                defaultChannels: ['inbox', 'mail'],
+                requiredChannels: ['inbox'],
+            ),
         ];
     }
 

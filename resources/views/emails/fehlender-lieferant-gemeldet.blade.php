@@ -25,7 +25,13 @@ Fehlender Lieferant im Bestellprozess gemeldet.
 
 **Webseite:** {{ filled($webseite) ? $webseite : '—' }}
 
+Wenn der Lieferant in der BÜ angelegt ist, aktualisiert der folgende Button den Lieferanten-Cache im Intranet. Die Bestellung selbst bleibt unverändert.
+
+<x-mail::button :url="$cacheErneuernUrl">
+Lieferant wurde angelegt
+</x-mail::button>
+
 ---
 
-Dies ist eine automatisch generierte Mail (Intranet).
+Dies ist eine automatisch generierte Mail (Intranet). Der Link ist 30 Tage gültig.
 </x-mail::message>

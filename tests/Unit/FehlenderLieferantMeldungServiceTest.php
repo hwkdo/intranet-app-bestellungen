@@ -39,12 +39,17 @@ it('stellt eine E-Mail an den konfigurierten Empfänger in die Warteschlange', f
     );
 
     Mail::assertQueued(FehlenderLieferantGemeldetMail::class, function (FehlenderLieferantGemeldetMail $mail) use ($melder): bool {
+        $html = $mail->render();
+
         return $mail->hasTo('rechnungswesen@hwk-do.de')
             && $mail->melder->is($melder)
             && $mail->lieferantName === 'Neuer Lieferant GmbH'
             && $mail->adresse === 'Musterstraße 1'
             && $mail->iban === 'DE89370400440532013000'
-            && $mail->webseite === 'https://example.com';
+            && $mail->webseite === 'https://example.com'
+            && str_contains($html, 'Lieferant wurde angelegt')
+            && str_contains($html, 'melder='.$melder->getKey())
+            && str_contains($html, 'signature=');
     });
 });
 
