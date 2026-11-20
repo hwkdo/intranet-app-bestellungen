@@ -182,7 +182,7 @@ class Detail extends Component
         $this->bestellung = $bestellung->load([
             'user', 'freigeber', 'besteller', 'internerEmpfaenger',
             'positionen.art', 'positionen.media', 'angebote.user', 'angebote.auftragszeile',
-            'auftragszeilen', 'notizen.user', 'aktionen.user', 'projekt',
+            'auftragszeilen.angebot', 'notizen.user', 'aktionen.user', 'projekt',
         ]);
 
         abort_unless(
@@ -442,8 +442,12 @@ class Detail extends Component
 
     public function einreichenGesperrtHinweis(): string
     {
-        if ($this->bestellung->istAuftragsvergabe() && (! $this->auftragszeilenVollstaendig() || ! filled($this->bestellung->lieferantenname))) {
+        if ($this->bestellung->istAuftragsvergabe() && (! $this->auftragszeilenFelderVollstaendig() || ! filled($this->bestellung->lieferantenname))) {
             return 'Mindestens eine vollständige Auftragszeile erfassen. Der Anbieter des übernommenen Angebots wird der Auftragnehmer.';
+        }
+
+        if ($this->bestellung->istAuftragsvergabe() && ! $this->auftragszeilenHabenAngebotsPdf()) {
+            return 'Jede Auftragszeile braucht das hinterlegte Angebot als PDF.';
         }
 
         if ($this->bestellung->nutztAuftragsvorlage()) {
@@ -1740,6 +1744,11 @@ class Detail extends Component
 
     private function auftragszeilenVollstaendig(): bool
     {
+        return $this->auftragszeilenFelderVollstaendig() && $this->auftragszeilenHabenAngebotsPdf();
+    }
+
+    private function auftragszeilenFelderVollstaendig(): bool
+    {
         $zeilen = $this->bestellung->auftragszeilen;
 
         if ($zeilen->isEmpty()) {
@@ -1750,6 +1759,21 @@ class Detail extends Component
             fn (Auftragszeile $zeile): bool => $zeile->angebotsdatum !== null
                 && filled($zeile->angebotsnummer)
                 && $zeile->betrag_netto !== null,
+        );
+    }
+
+    private function auftragszeilenHabenAngebotsPdf(): bool
+    {
+        $this->bestellung->loadMissing('auftragszeilen.angebot');
+
+        $zeilen = $this->bestellung->auftragszeilen;
+
+        if ($zeilen->isEmpty()) {
+            return false;
+        }
+
+        return $zeilen->every(
+            fn (Auftragszeile $zeile): bool => $zeile->angebot?->absolutePdfPath() !== null,
         );
     }
 
@@ -1860,7 +1884,7 @@ class Detail extends Component
         $this->bestellung = $this->bestellung->fresh([
             'user', 'freigeber', 'besteller', 'internerEmpfaenger',
             'positionen.art', 'positionen.media', 'angebote.user', 'angebote.auftragszeile',
-            'auftragszeilen', 'notizen.user', 'aktionen.user', 'projekt',
+            'auftragszeilen.angebot', 'notizen.user', 'aktionen.user', 'projekt',
         ]);
     }
 

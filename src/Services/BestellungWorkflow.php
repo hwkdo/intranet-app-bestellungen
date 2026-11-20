@@ -176,6 +176,8 @@ class BestellungWorkflow
             );
         }
 
+        $this->ensureAuftragszeilenVollstaendig($bestellung);
+
         if (! IntranetAppBestellungenSettings::resolvedAppSettings()->autoPushBeiBestellt) {
             return DB::transaction(function () use ($bestellung, $user, $nachricht): Bestellung {
                 $bestellung->besteller_id = $user->getKey();
@@ -285,7 +287,7 @@ class BestellungWorkflow
             return;
         }
 
-        $bestellung->loadMissing('auftragszeilen');
+        $bestellung->loadMissing('auftragszeilen.angebot');
 
         if ($bestellung->auftragszeilen->isEmpty()) {
             throw new WorkflowException('Für die Auftragsvergabe ist mindestens eine Auftragszeile erforderlich.');
@@ -311,6 +313,14 @@ class BestellungWorkflow
             if ($fehlend !== []) {
                 throw new WorkflowException('Für das Auftragsschreiben fehlen: '.implode(', ', $fehlend).'.');
             }
+        }
+
+        $ohnePdf = $bestellung->auftragszeilen->contains(
+            fn (Auftragszeile $zeile): bool => $zeile->angebot?->absolutePdfPath() === null,
+        );
+
+        if ($ohnePdf) {
+            throw new WorkflowException('Jede Auftragszeile braucht das hinterlegte Angebot als PDF.');
         }
     }
 

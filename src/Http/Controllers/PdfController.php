@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Http\Controllers;
 
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
+use Hwkdo\IntranetAppBestellungen\Exceptions\AuftragsscheinUnvollstaendigException;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Services\Pdf\BestellscheinPdfService;
 use Illuminate\Http\Response;
@@ -21,14 +22,27 @@ class PdfController extends Controller
     {
         $this->ensureVisible($bestellung);
 
-        return $this->pdfService->inline($bestellung, $this->resolveTyp($bestellung, $typ));
+        return $this->pdfOderHinweis($bestellung, $typ, download: false);
     }
 
     public function download(Bestellung $bestellung, string $typ = 'intern'): Response
     {
         $this->ensureVisible($bestellung);
 
-        return $this->pdfService->download($bestellung, $this->resolveTyp($bestellung, $typ));
+        return $this->pdfOderHinweis($bestellung, $typ, download: true);
+    }
+
+    private function pdfOderHinweis(Bestellung $bestellung, string $typ, bool $download): Response
+    {
+        try {
+            $variante = $this->resolveTyp($bestellung, $typ);
+
+            return $download
+                ? $this->pdfService->download($bestellung, $variante)
+                : $this->pdfService->inline($bestellung, $variante);
+        } catch (AuftragsscheinUnvollstaendigException $exception) {
+            abort(422, $exception->getMessage());
+        }
     }
 
     private function ensureVisible(Bestellung $bestellung): void

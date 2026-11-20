@@ -15,6 +15,7 @@ use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\Pdf\BestellscheinPdfService;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
@@ -332,6 +333,15 @@ it('übernimmt den Kontakt aus dem Angebot und sperrt das Einreichen ohne Frist 
 
     $zeile->refresh()->update(['betrag_brutto' => 1190]);
 
+    $nochOhnePdf = Livewire::actingAs($user)->test(Detail::class, ['bestellung' => $bestellung->fresh()]);
+    expect($nochOhnePdf->instance()->kannEinreichen())->toBeFalse()
+        ->and($nochOhnePdf->instance()->einreichenGesperrtHinweis())->toBe('Jede Auftragszeile braucht das hinterlegte Angebot als PDF.');
+
+    Storage::fake('local');
+    $pdfPfad = 'bestellungen/angebote/'.$angebot->id.'.pdf';
+    Storage::disk('local')->put($pdfPfad, '%PDF-1.4');
+    $angebot->update(['pdf_path' => $pdfPfad]);
+
     $offen = Livewire::actingAs($user)->test(Detail::class, ['bestellung' => $bestellung->fresh()]);
     expect($offen->instance()->kannEinreichen())->toBeTrue();
 });
@@ -417,6 +427,19 @@ it('speichert die Ausführungsfrist beim Setzen und mit der Auftragszeile', func
         'auftrag_modus' => AuftragModus::Vorlage,
         'ausfuehrungsfrist' => null,
     ]);
+
+    Storage::fake('local');
+    $pdfPfad = 'bestellungen/angebote/frist-'.$bestellung->id.'.pdf';
+    Storage::disk('local')->put($pdfPfad, '%PDF-1.4');
+    $angebot = Angebot::query()->create([
+        'bestellung_id' => $bestellung->id,
+        'user_id' => $user->id,
+        'typ' => 'angebot',
+        'lieferantenname' => 'Dach GmbH',
+        'nummer' => 'A-100',
+        'pdf_path' => $pdfPfad,
+    ]);
+    $bestellung->auftragszeilen()->first()?->update(['angebot_id' => $angebot->id]);
 
     $component = Livewire::actingAs($user)
         ->test(Detail::class, ['bestellung' => $bestellung])

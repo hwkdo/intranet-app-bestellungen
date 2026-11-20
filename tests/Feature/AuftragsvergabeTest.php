@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 use App\Models\User;
 use App\Services\IntranetLegacyService;
+use App\Services\PdfService;
 use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
+use Hwkdo\IntranetAppBestellungen\Exceptions\AuftragsscheinUnvollstaendigException;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Jobs\ExtractAngebotMetadataJob;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Detail;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Erstellen;
 use Hwkdo\IntranetAppBestellungen\Mail\FehlenderLieferantGemeldetMail;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
+use Hwkdo\IntranetAppBestellungen\Models\Auftragszeile;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\IntranetAppBestellungenSettings;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
@@ -20,6 +23,7 @@ use Hwkdo\IntranetAppBestellungen\Services\Api\AngebotPdfMetadataExtractionServi
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
 use Hwkdo\IntranetAppBestellungen\Services\Lieferant\LieferantErkennungService;
 use Hwkdo\IntranetAppBestellungen\Services\Pdf\BestellscheinPdfService;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -208,6 +212,139 @@ it('verweigert das Einreichen ohne Auftragszeile', function (): void {
 
     expect(fn () => app(BestellungWorkflow::class)->einreichen($bestellung, $user))
         ->toThrow(WorkflowException::class, 'mindestens eine Auftragszeile');
+});
+
+it('verweigert Einreichen und Bestellen ohne Angebots-PDF an der Auftragszeile', function (): void {
+    $user = User::factory()->create();
+    $user->assignRole('Benutzer');
+
+    $entwurf = Bestellung::factory()->auftragsvergabe()->create([
+        'status' => BestellungStatus::Entwurf,
+        'user_id' => $user->id,
+        'lieferantenname' => 'Dach GmbH',
+        'gesamtbetrag' => 100,
+    ]);
+    Auftragszeile::factory()->create([
+        'bestellung_id' => $entwurf->id,
+        'angebot_id' => null,
+        'nr' => 1,
+        'angebotsdatum' => '2026-10-12',
+        'angebotsnummer' => 'A-100',
+        'betrag_netto' => 100,
+    ]);
+
+    expect(fn () => app(BestellungWorkflow::class)->einreichen($entwurf->fresh(), $user))
+        ->toThrow(WorkflowException::class, 'hinterlegte Angebot als PDF');
+
+    $freigegeben = Bestellung::factory()->auftragsvergabe()->create([
+        'status' => BestellungStatus::Freigegeben,
+        'user_id' => $user->id,
+        'lieferantenname' => 'Dach GmbH',
+        'gesamtbetrag' => 100,
+    ]);
+    Auftragszeile::factory()->create([
+        'bestellung_id' => $freigegeben->id,
+        'angebot_id' => null,
+        'nr' => 1,
+        'angebotsdatum' => '2026-10-12',
+        'angebotsnummer' => 'A-100',
+        'betrag_netto' => 100,
+    ]);
+
+    expect(fn () => app(BestellungWorkflow::class)->bestellen($freigegeben->fresh(), $user))
+        ->toThrow(WorkflowException::class, 'hinterlegte Angebot als PDF');
+});
+
+it('hängt die PDFs der übernommenen Angebote in Zeilenreihenfolge an den Auftragsschein', function (): void {
+    Storage::fake('local');
+
+    $user = User::factory()->create();
+    $bestellung = Bestellung::factory()->auftragsvergabe()->create([
+        'user_id' => $user->id,
+        'lieferantenname' => 'Dach GmbH',
+    ]);
+
+    $erster = angebotMitPdf($bestellung, $user, 'erstes.pdf');
+    $zweiter = angebotMitPdf($bestellung, $user, 'zweites.pdf');
+    $nichtGewaehlt = angebotMitPdf($bestellung, $user, 'offen.pdf');
+
+    Auftragszeile::factory()->create([
+        'bestellung_id' => $bestellung->id,
+        'angebot_id' => $zweiter->id,
+        'nr' => 2,
+        'angebotsnummer' => 'B-2',
+    ]);
+    Auftragszeile::factory()->create([
+        'bestellung_id' => $bestellung->id,
+        'angebot_id' => $erster->id,
+        'nr' => 1,
+        'angebotsnummer' => 'A-1',
+    ]);
+
+    $merged = null;
+    $pdf = Mockery::mock(PdfService::class);
+    $pdf->shouldReceive('saveFromHtml')->once()->andReturnUsing(function (string $html, string $path, string $filename): string {
+        File::ensureDirectoryExists($path);
+        $name = str_ends_with($filename, '.pdf') ? $filename : $filename.'.pdf';
+        file_put_contents($path.'/'.$name, '%PDF-schein');
+
+        return $name;
+    });
+    $pdf->shouldReceive('mergePdfs')->once()->andReturnUsing(function (array $pdfs) use (&$merged): string {
+        $merged = $pdfs;
+
+        return $pdfs[0];
+    });
+    app()->instance(PdfService::class, $pdf);
+
+    app(BestellscheinPdfService::class)->buildFile($bestellung->fresh(), BestellungTyp::Auftragsvergabe);
+
+    expect($merged)->toHaveCount(3)
+        ->and($merged[1])->toBe($erster->absolutePdfPath())
+        ->and($merged[2])->toBe($zweiter->absolutePdfPath())
+        ->and($merged)->not->toContain($nichtGewaehlt->absolutePdfPath());
+});
+
+it('erzeugt keinen Auftragsschein, wenn einer Auftragszeile die Angebots-PDF fehlt', function (): void {
+    Storage::fake('local');
+
+    $user = User::factory()->create();
+    $bestellung = Bestellung::factory()->auftragsvergabe()->create([
+        'user_id' => $user->id,
+        'lieferantenname' => 'Dach GmbH',
+    ]);
+    $mitPdf = angebotMitPdf($bestellung, $user, 'vorhanden.pdf');
+    $ohnePdf = Angebot::query()->create([
+        'bestellung_id' => $bestellung->id,
+        'user_id' => $user->id,
+        'typ' => 'angebot',
+        'pdf_path' => 'bestellungen/angebote/fehlt.pdf',
+    ]);
+
+    Auftragszeile::factory()->create([
+        'bestellung_id' => $bestellung->id,
+        'angebot_id' => $mitPdf->id,
+        'nr' => 1,
+    ]);
+    Auftragszeile::factory()->create([
+        'bestellung_id' => $bestellung->id,
+        'angebot_id' => $ohnePdf->id,
+        'nr' => 2,
+    ]);
+
+    $pdf = Mockery::mock(PdfService::class);
+    $pdf->shouldReceive('saveFromHtml')->once()->andReturnUsing(function (string $html, string $path, string $filename): string {
+        File::ensureDirectoryExists($path);
+        $name = str_ends_with($filename, '.pdf') ? $filename : $filename.'.pdf';
+        file_put_contents($path.'/'.$name, '%PDF-schein');
+
+        return $name;
+    });
+    $pdf->shouldNotReceive('mergePdfs');
+    app()->instance(PdfService::class, $pdf);
+
+    expect(fn () => app(BestellscheinPdfService::class)->buildFile($bestellung->fresh(), BestellungTyp::Auftragsvergabe))
+        ->toThrow(AuftragsscheinUnvollstaendigException::class, 'Auftragszeile 2');
 });
 
 it('wiederholt eine Auftragsvergabe ohne Zeilen und ohne Angebote', function (): void {
@@ -478,3 +615,18 @@ it('verlinkt ein in D3 liegendes Angebot auf d3one', function (): void {
         ->assertSeeHtml('href="https://d3one.example/o2/DOC-99/"')
         ->assertSeeHtml('target="_blank"');
 });
+
+function angebotMitPdf(Bestellung $bestellung, User $user, string $dateiname): Angebot
+{
+    $pfad = 'bestellungen/angebote/'.$bestellung->id.'/'.$dateiname;
+    Storage::disk('local')->put($pfad, '%PDF-1.4 '.$dateiname);
+
+    return Angebot::query()->create([
+        'bestellung_id' => $bestellung->id,
+        'user_id' => $user->id,
+        'typ' => 'angebot',
+        'lieferantenname' => 'Dach GmbH',
+        'nummer' => $dateiname,
+        'pdf_path' => $pfad,
+    ]);
+}

@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\Storage;
 
 class Angebot extends Model
 {
@@ -40,6 +41,31 @@ class Angebot extends Model
     public function auftragszeile(): HasOne
     {
         return $this->hasOne(Auftragszeile::class);
+    }
+
+    /**
+     * Absoluter Pfad der hinterlegten PDF, inklusive der von Gotenberg
+     * gelegentlich doppelt angehängten Endung.
+     */
+    public function absolutePdfPath(): ?string
+    {
+        if (! filled($this->pdf_path)) {
+            return null;
+        }
+
+        $disk = Storage::disk('local');
+
+        if ($disk->exists($this->pdf_path)) {
+            return $disk->path($this->pdf_path);
+        }
+
+        $doubleExtensionPath = $this->pdf_path.'.pdf';
+
+        if ($disk->exists($doubleExtensionPath)) {
+            return $disk->path($doubleExtensionPath);
+        }
+
+        return null;
     }
 
     public function angabenVollstaendig(): bool

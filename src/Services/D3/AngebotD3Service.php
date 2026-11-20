@@ -127,9 +127,11 @@ class AngebotD3Service
 
         foreach ($bestellung->angebote->whereNull('d3id') as $angebot) {
             if ($this->push($angebot) === null) {
-                $label = $angebot->typ === 'begruendung'
-                    ? 'Ausnahme-Begründung'
-                    : 'Vergleichsangebot';
+                $label = match (true) {
+                    $angebot->typ === 'begruendung' => 'Ausnahme-Begründung',
+                    $bestellung->istAuftragsvergabe() => 'Angebot',
+                    default => 'Vergleichsangebot',
+                };
 
                 throw new \RuntimeException(
                     sprintf('Die D3-Übertragung der %s (ID %d) ist fehlgeschlagen.', $label, $angebot->getKey()),
@@ -141,15 +143,9 @@ class AngebotD3Service
     private function resolvePdfPath(Angebot $angebot): ?string
     {
         if ($angebot->typ === 'begruendung' && empty($angebot->pdf_path)) {
-            return $this->generateBegruendungPdf($angebot);
+            $this->generateBegruendungPdf($angebot);
         }
 
-        if (! $angebot->pdf_path) {
-            return null;
-        }
-
-        return Storage::disk('local')->exists($angebot->pdf_path)
-            ? Storage::disk('local')->path($angebot->pdf_path)
-            : null;
+        return $angebot->absolutePdfPath();
     }
 }

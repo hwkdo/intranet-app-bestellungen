@@ -6,6 +6,7 @@ namespace Hwkdo\IntranetAppBestellungen\Services\Pdf;
 
 use App\Services\PdfService;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
+use Hwkdo\IntranetAppBestellungen\Exceptions\AuftragsscheinUnvollstaendigException;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Illuminate\Http\Response;
@@ -129,7 +130,8 @@ class BestellscheinPdfService
     }
 
     /**
-     * Erzeugt das Bestellschein-PDF und mergt ggf. Anhänge der Positionen.
+     * Erzeugt das Bestellschein-PDF und mergt Positionsanhänge.
+     * Bei der Auftragsvergabe hängen die PDFs der übernommenen Angebote an.
      * Liefert den lokalen Dateipfad zur fertigen PDF zurück.
      */
     public function buildFile(Bestellung $bestellung, BestellungTyp $typ = BestellungTyp::Intern): string
@@ -150,14 +152,18 @@ class BestellscheinPdfService
             ));
         }
 
-        $positionAnhaenge = $this->collectPositionAttachments($bestellung);
+        $anhaenge = $this->collectPositionAttachments($bestellung);
 
-        if ($positionAnhaenge === []) {
+        if ($typ === BestellungTyp::Auftragsvergabe) {
+            $anhaenge = array_merge($anhaenge, $this->collectGewaehlteAngebotPdfs($bestellung));
+        }
+
+        if ($anhaenge === []) {
             return $basePath;
         }
 
         return $this->pdfService->mergePdfs(
-            array_merge([$basePath], $positionAnhaenge),
+            array_merge([$basePath], $anhaenge),
             $tmpDir,
             'merged-'.$baseFilename,
         );
@@ -212,5 +218,33 @@ class BestellscheinPdfService
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * PDFs der übernommenen Angebote in Zeilenreihenfolge.
+     * Nicht übernommene Angebote bleiben außen vor; sie gehen separat als ANGEB nach D3.
+     *
+     * @return list<string>
+     */
+    private function collectGewaehlteAngebotPdfs(Bestellung $bestellung): array
+    {
+        $bestellung->loadMissing('auftragszeilen.angebot');
+
+        $pfade = [];
+
+        foreach ($bestellung->auftragszeilen as $zeile) {
+            $pfad = $zeile->angebot?->absolutePdfPath();
+
+            if ($pfad === null) {
+                throw new AuftragsscheinUnvollstaendigException(sprintf(
+                    'Die Auftragszeile %d hat kein hinterlegtes Angebot als PDF.',
+                    $zeile->nr,
+                ));
+            }
+
+            $pfade[] = $pfad;
+        }
+
+        return $pfade;
     }
 }
