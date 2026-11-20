@@ -7,7 +7,7 @@
     <style>
         @page {
             size: A4;
-            margin: 14mm 16mm 16mm 22mm;
+            margin: 14mm 5mm 16mm 22mm;
         }
 
         * {
@@ -73,11 +73,12 @@
         }
 
         .haupt {
-            padding-right: 8mm;
+            padding-right: 16mm;
         }
 
         .info {
-            width: 58mm;
+            width: 1%;
+            white-space: nowrap;
             font-size: 9pt;
             line-height: 1.35;
         }
