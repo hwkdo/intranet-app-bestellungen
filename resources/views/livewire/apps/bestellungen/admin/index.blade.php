@@ -7,6 +7,7 @@
                     <flux:tab name="angebote" icon="check-badge">Angebotsregeln</flux:tab>
                     <flux:tab name="arten" icon="rectangle-stack">Bestell-Arten</flux:tab>
                     <flux:tab name="anlagen" icon="paper-clip">Anlagen</flux:tab>
+                    <flux:tab name="auftragsvorlagen" icon="document-text">Auftragsvorlagen</flux:tab>
                     <flux:tab name="stammdaten" icon="circle-stack">Stammdaten</flux:tab>
                     <flux:tab name="monitoring" icon="eye">Monitoring</flux:tab>
                     <flux:tab name="settings" icon="cog-6-tooth">Allgemeine Einstellungen</flux:tab>
@@ -29,6 +30,10 @@
 
             <flux:tab.panel name="anlagen">
                 <livewire:intranet-app-bestellungen::apps.bestellungen.admin.anlagen-editor />
+            </flux:tab.panel>
+
+            <flux:tab.panel name="auftragsvorlagen">
+                <livewire:intranet-app-bestellungen::apps.bestellungen.admin.auftragsvorlagen-editor />
             </flux:tab.panel>
 
             <flux:tab.panel name="stammdaten">

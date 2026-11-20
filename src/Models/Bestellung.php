@@ -57,6 +57,7 @@ class Bestellung extends Model
             'status' => BestellungStatus::class,
             'typ' => BestellungTyp::class,
             'auftrag_modus' => AuftragModus::class,
+            'vorlage_werte' => 'array',
             'ausfuehrungsfrist' => 'date',
             'kontierung' => 'array',
             'gruppen' => 'array',
@@ -245,6 +246,11 @@ class Bestellung extends Model
     public function auftragszeilen(): HasMany
     {
         return $this->hasMany(Auftragszeile::class)->orderBy('nr');
+    }
+
+    public function auftragsvorlage(): BelongsTo
+    {
+        return $this->belongsTo(Auftragsvorlage::class, 'auftragsvorlage_id');
     }
 
     public function kassenbon(): HasOne

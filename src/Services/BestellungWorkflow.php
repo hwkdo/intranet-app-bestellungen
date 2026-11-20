@@ -178,6 +178,12 @@ class BestellungWorkflow
 
         $this->ensureAuftragszeilenVollstaendig($bestellung);
 
+        if ($bestellung->nutztAuftragsvorlage() && $this->auftragsschreibenDaten->vorlageFuer($bestellung) === null) {
+            throw new WorkflowException('Für den Auftragsschein ist keine Vorlage gewählt.');
+        }
+
+        $this->auftragsschreibenDaten->brieftextEinfrieren($bestellung);
+
         if (! IntranetAppBestellungenSettings::resolvedAppSettings()->autoPushBeiBestellt) {
             return DB::transaction(function () use ($bestellung, $user, $nachricht): Bestellung {
                 $bestellung->besteller_id = $user->getKey();

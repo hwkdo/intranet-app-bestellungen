@@ -1,13 +1,15 @@
 <div class="space-y-4">
     @if ($bestellung->istAuftragsvergabe())
         @if ($this->kannBearbeiten())
-            <flux:radio.group wire:model.live="auftragModus" label="Auftragsschein" variant="segmented">
-                <flux:radio value="tabelle" label="Freitext je Zeile" />
-                <flux:radio value="vorlage" label="Aus Vorlage generieren" />
-            </flux:radio.group>
+            <flux:select wire:model.live="auftragsscheinWahl" label="Auftragsschein">
+                <flux:select.option value="tabelle">Freitext je Zeile</flux:select.option>
+                @foreach ($this->auftragsvorlagen as $vorlage)
+                    <flux:select.option value="vorlage-{{ $vorlage->id }}">{{ $vorlage->name }}</flux:select.option>
+                @endforeach
+            </flux:select>
         @else
             <flux:text>
-                Auftragsschein: {{ $bestellung->auftrag_modus?->label() ?? 'Freitext je Zeile' }}
+                Auftragsschein: {{ $bestellung->nutztAuftragsvorlage() ? ($bestellung->auftragsvorlage?->name ?? 'Aus Vorlage') : 'Freitext je Zeile' }}
             </flux:text>
         @endif
     @endif
@@ -26,7 +28,13 @@
             <section class="space-y-4 rounded-lg border border-[#d0e3f9] p-4 dark:border-white/10">
                 <div>
                     <flux:heading size="sm">Anschreiben</flux:heading>
-                    <flux:text class="text-zinc-500">Frist und Ansprechpartner stehen im Auftragsschreiben. Die Frist wird beim Auswählen gespeichert.</flux:text>
+                    <flux:text class="text-zinc-500">
+                        @if ($this->vorlageVerwendet('freitext'))
+                            Den Brieftext schreiben Sie selbst. **fett** und Leerzeilen werden übernommen.
+                        @else
+                            Die gewählte Vorlage erzeugt den Brieftext. Ergänzen Sie die abgefragten Angaben.
+                        @endif
+                    </flux:text>
                 </div>
 
                 @php
@@ -38,14 +46,31 @@
                     </flux:callout>
                 @endif
 
-                <div class="grid gap-3 md:grid-cols-2">
-                    <flux:field>
-                        <flux:label>Ausführungsfrist</flux:label>
-                        <flux:date-picker wire:model.live="ausfuehrungsfrist" locale="de-DE" />
-                        <flux:error name="ausfuehrungsfrist" />
-                    </flux:field>
-                </div>
+                @if ($this->vorlageVerwendet('freitext'))
+                    <div class="space-y-2">
+                        <flux:textarea wire:model.live.debounce.400ms="vorlageFreitext" label="Brieftext" rows="10" />
+                        <flux:error name="vorlageFreitext" />
+                        @if ($this->vorlageFreitextIstGeaendert())
+                            <div class="flex justify-end">
+                                <flux:button size="sm" variant="ghost" icon="arrow-uturn-left" wire:click="vorlageFreitextVerwerfen">
+                                    Brieftext rückgängig machen
+                                </flux:button>
+                            </div>
+                        @endif
+                    </div>
+                @endif
 
+                @if ($this->vorlageVerwendet('ausfuehrungsfrist'))
+                    <div class="grid gap-3 md:grid-cols-2">
+                        <flux:field>
+                            <flux:label>Ausführungsfrist</flux:label>
+                            <flux:date-picker wire:model.live="ausfuehrungsfrist" locale="de-DE" />
+                            <flux:error name="ausfuehrungsfrist" />
+                        </flux:field>
+                    </div>
+                @endif
+
+                @if ($this->vorlageVerwendet('ansprechpartner'))
                 <div class="space-y-3">
                     <div class="flex flex-wrap items-center gap-2">
                         <flux:heading size="sm">Ansprechpartner beim Auftragnehmer</flux:heading>
@@ -85,6 +110,7 @@
                         </div>
                     @endif
                 </div>
+                @endif
 
                 <div class="flex justify-end">
                     <flux:button
@@ -99,10 +125,19 @@
             </section>
         @else
             <dl class="grid gap-2 text-sm md:grid-cols-2">
-                <div>
-                    <dt class="text-zinc-500">Ausführungsfrist</dt>
-                    <dd>{{ $bestellung->ausfuehrungsfrist?->format('d.m.Y') ?? '—' }}</dd>
-                </div>
+                @if ($this->vorlageVerwendet('freitext'))
+                    <div class="md:col-span-2">
+                        <dt class="text-zinc-500">Brieftext</dt>
+                        <dd class="whitespace-pre-line">{{ data_get($bestellung->vorlage_werte, 'freitext') ?: '—' }}</dd>
+                    </div>
+                @endif
+                @if ($this->vorlageVerwendet('ausfuehrungsfrist'))
+                    <div>
+                        <dt class="text-zinc-500">Ausführungsfrist</dt>
+                        <dd>{{ $bestellung->ausfuehrungsfrist?->format('d.m.Y') ?? '—' }}</dd>
+                    </div>
+                @endif
+                @if ($this->vorlageVerwendet('ansprechpartner'))
                 <div>
                     <dt class="text-zinc-500">Ansprechpartner</dt>
                     <dd>
@@ -112,6 +147,7 @@
                         @endif
                     </dd>
                 </div>
+                @endif
             </dl>
             <flux:button
                 size="sm"

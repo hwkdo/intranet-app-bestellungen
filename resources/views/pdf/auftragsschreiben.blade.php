@@ -183,25 +183,13 @@
                 </tr>
             </table>
 
-            <p class="anrede">{{ $schreiben['anrede'] }}</p>
+            @if ($schreiben['anredeAutomatisch'])
+                <p class="anrede">{{ $schreiben['anrede'] }}</p>
+            @endif
 
-            <p>
-                Sie erhalten hiermit den Auftrag zu <strong>{{ $schreiben['betreff'] !== '' ? $schreiben['betreff'] : '–' }}</strong>
-                gemäß {{ $schreiben['mehrereAngebote'] ? 'Ihren oben genannten Angeboten' : 'Ihrem oben genannten Angebot' }}
-                (Angebotswert gesamt: <strong>{{ $schreiben['angebotswert'] }}</strong> inkl. Umsatzsteuer).
-            </p>
-
-            <p>
-                Die Ausführungsfrist für diesen Auftrag endet am <strong>{{ $schreiben['frist'] }}</strong>. Die
-                Nichteinhaltung der Ausführungsfrist ohne unsere vorherige Zustimmung
-                entbindet uns von der Abnahmeverpflichtung und bedeutet die Stornierung des
-                Auftrages.
-            </p>
-
-            <p>
-                Lieferschein und Rechnung müssen unbedingt die Verwendungsstelle bzw. den
-                Einrichtungsbereich ausweisen.
-            </p>
+            <div class="brieftext">
+                {!! $schreiben['brieftext'] !!}
+            </div>
 
             <p class="abschluss">Handwerkskammer Dortmund</p>
 

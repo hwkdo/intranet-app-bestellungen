@@ -11,12 +11,14 @@ use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
 use Hwkdo\IntranetAppBestellungen\Data\AngebotsregelAuswertung;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\AuftragModus;
+use Hwkdo\IntranetAppBestellungen\Enums\AuftragsvorlageVariable;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Http\Requests\MeldeFehlendenLieferantRequest;
 use Hwkdo\IntranetAppBestellungen\Jobs\ExtractAngebotMetadataJob;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
+use Hwkdo\IntranetAppBestellungen\Models\Auftragsvorlage;
 use Hwkdo\IntranetAppBestellungen\Models\Auftragszeile;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
@@ -140,6 +142,12 @@ class Detail extends Component
 
     public string $auftragModus = 'tabelle';
 
+    public string $auftragsscheinWahl = 'tabelle';
+
+    public ?int $auftragsvorlageId = null;
+
+    public string $vorlageFreitext = '';
+
     public ?string $ausfuehrungsfrist = null;
 
     public ?string $auftragnehmerAnrede = null;
@@ -182,7 +190,7 @@ class Detail extends Component
         $this->bestellung = $bestellung->load([
             'user', 'freigeber', 'besteller', 'internerEmpfaenger',
             'positionen.art', 'positionen.media', 'angebote.user', 'angebote.auftragszeile',
-            'auftragszeilen.angebot', 'notizen.user', 'aktionen.user', 'projekt',
+            'auftragszeilen.angebot', 'auftragsvorlage', 'notizen.user', 'aktionen.user', 'projekt',
         ]);
 
         abort_unless(
@@ -849,6 +857,7 @@ class Detail extends Component
             $kopie->freigeber_id = null;
             $kopie->besteller_id = null;
             $kopie->ausfuehrungsfrist = null;
+            $kopie->auftragsschreiben_inhalt = null;
             $kopie->d3id = null;
             $kopie->d3_pushed_at = null;
             $kopie->bestellt_at = null;
@@ -1552,6 +1561,25 @@ class Detail extends Component
         $this->auftragModusGeaendert();
     }
 
+    public function updatedAuftragsscheinWahl(): void
+    {
+        if ($this->auftragsscheinWahl === 'tabelle') {
+            $this->auftragModus = AuftragModus::Tabelle->value;
+            $this->auftragsvorlageId = null;
+        } elseif (preg_match('/^vorlage-(\d+)$/', $this->auftragsscheinWahl, $treffer) === 1) {
+            $this->auftragModus = AuftragModus::Vorlage->value;
+            $this->auftragsvorlageId = (int) $treffer[1];
+        }
+
+        $this->auftragModusGeaendert();
+    }
+
+    public function updatedVorlageFreitext(): void
+    {
+        $this->auftragsschreibenAusFormularUebernehmen();
+        $this->bestellung->refresh();
+    }
+
     public function auftragModusGeaendert(): void
     {
         if (! $this->kannAuftragszeilenBearbeiten()) {
@@ -1566,8 +1594,19 @@ class Detail extends Component
             $this->auftragModus = $modus->value;
         }
 
+        $vorlageId = $modus === AuftragModus::Vorlage ? $this->auftragsvorlageId : null;
+
+        if ($modus === AuftragModus::Vorlage && $vorlageId === null) {
+            $standardId = Auftragsvorlage::query()->where('schluessel', 'hausverwaltung')->value('id');
+            $vorlageId = $standardId !== null ? (int) $standardId : null;
+            $this->auftragsvorlageId = $vorlageId;
+        }
+
+        $vorlage = $vorlageId !== null ? Auftragsvorlage::query()->find($vorlageId) : null;
+
         $this->bestellung->forceFill([
             'auftrag_modus' => $modus,
+            'auftragsvorlage_id' => $vorlage?->getKey(),
         ])->save();
         $this->auftragnehmerVorbelegenWennLeer();
 
@@ -1576,12 +1615,48 @@ class Detail extends Component
             Auth::user(),
             AktionTyp::AuftragszeileGeaendert,
             $modus === AuftragModus::Vorlage
-                ? 'Auftragsschein wird aus der Vorlage erzeugt.'
+                ? 'Auftragsschein verwendet die Vorlage '.($vorlage?->name ?? 'ohne Zuordnung').'.'
                 : 'Auftragsschein verwendet Freitext je Zeile.',
         );
 
         $this->refreshBestellung();
         $this->syncAuftragsschreiben();
+    }
+
+    #[Computed]
+    public function auftragsvorlagen(): Collection
+    {
+        return Auftragsvorlage::query()->aktiv()->orderBy('sort')->orderBy('name')->get();
+    }
+
+    public function vorlageVerwendet(string $variable): bool
+    {
+        $enum = AuftragsvorlageVariable::tryFrom($variable);
+        $vorlage = $this->bestellung->auftragsvorlage;
+
+        if (! $enum instanceof AuftragsvorlageVariable) {
+            return false;
+        }
+
+        if (! $vorlage instanceof Auftragsvorlage && $this->bestellung->nutztAuftragsvorlage()) {
+            $vorlage = Auftragsvorlage::query()->where('schluessel', 'hausverwaltung')->first();
+        }
+
+        return $vorlage?->verwendet($enum) ?? false;
+    }
+
+    public function vorlageFreitextIstGeaendert(): bool
+    {
+        $gespeichert = data_get($this->bestellung->vorlage_werte, 'freitext');
+
+        return $this->vergleichstext($this->vorlageFreitext) !== $this->vergleichstext(is_string($gespeichert) ? $gespeichert : null);
+    }
+
+    public function vorlageFreitextVerwerfen(): void
+    {
+        $gespeichert = data_get($this->bestellung->vorlage_werte, 'freitext');
+        $this->vorlageFreitext = is_string($gespeichert) ? $gespeichert : '';
+        $this->resetValidation('vorlageFreitext');
     }
 
     public function updatedAusfuehrungsfrist(): void
@@ -1603,13 +1678,18 @@ class Detail extends Component
             'auftragnehmerAnrede' => ['nullable', Rule::in(['herr', 'frau'])],
             'auftragnehmerAnsprechpartner' => ['nullable', 'string', 'max:255'],
             'auftragnehmerEmail' => ['nullable', 'email', 'max:255'],
+            'vorlageFreitext' => ['nullable', 'string', 'max:20000'],
         ]);
+
+        $werte = is_array($this->bestellung->vorlage_werte) ? $this->bestellung->vorlage_werte : [];
+        $werte['freitext'] = $this->nullableText($this->vorlageFreitext);
 
         $this->bestellung->forceFill([
             'ausfuehrungsfrist' => $this->ausfuehrungsfrist,
             'auftragnehmer_anrede' => $this->auftragnehmerAnrede,
             'auftragnehmer_ansprechpartner' => $this->nullableText($this->auftragnehmerAnsprechpartner) ?? '',
             'auftragnehmer_email' => $this->nullableText($this->auftragnehmerEmail) ?? '',
+            'vorlage_werte' => $werte,
         ])->save();
 
         app(BestellungWorkflow::class)->logAktion(
@@ -1718,8 +1798,12 @@ class Detail extends Component
             $email = $this->bestellung->auftragnehmer_email;
         }
 
+        $werte = is_array($this->bestellung->vorlage_werte) ? $this->bestellung->vorlage_werte : [];
+        $werte['freitext'] = $this->nullableText($this->vorlageFreitext);
+
         $felder = [
             'ausfuehrungsfrist' => $frist,
+            'vorlage_werte' => $werte,
         ];
 
         if ($this->auftragnehmerAnrede !== null || $this->bestellung->auftragnehmer_anrede !== null) {
@@ -1836,6 +1920,14 @@ class Detail extends Component
         $modus = $this->bestellung->auftrag_modus;
 
         $this->auftragModus = $modus instanceof AuftragModus ? $modus->value : AuftragModus::Tabelle->value;
+        $this->auftragsvorlageId = $this->bestellung->auftragsvorlage_id !== null
+            ? (int) $this->bestellung->auftragsvorlage_id
+            : null;
+        $this->auftragsscheinWahl = $this->auftragModus === AuftragModus::Vorlage->value && $this->auftragsvorlageId !== null
+            ? 'vorlage-'.$this->auftragsvorlageId
+            : AuftragModus::Tabelle->value;
+        $freitext = data_get($this->bestellung->vorlage_werte, 'freitext');
+        $this->vorlageFreitext = is_string($freitext) ? $freitext : '';
         $this->ausfuehrungsfrist = $this->bestellung->ausfuehrungsfrist?->toDateString();
         $this->auftragnehmerAnrede = $this->bestellung->auftragnehmer_anrede;
         $this->auftragnehmerAnsprechpartner = $this->bestellung->auftragnehmer_ansprechpartner;
@@ -1884,7 +1976,7 @@ class Detail extends Component
         $this->bestellung = $this->bestellung->fresh([
             'user', 'freigeber', 'besteller', 'internerEmpfaenger',
             'positionen.art', 'positionen.media', 'angebote.user', 'angebote.auftragszeile',
-            'auftragszeilen.angebot', 'notizen.user', 'aktionen.user', 'projekt',
+            'auftragszeilen.angebot', 'auftragsvorlage', 'notizen.user', 'aktionen.user', 'projekt',
         ]);
     }
 

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Hwkdo\IntranetAppBestellungen\Services\Pdf;
 
 use App\Models\User;
+use Hwkdo\IntranetAppBestellungen\Enums\AuftragsvorlageVariable;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
+use Hwkdo\IntranetAppBestellungen\Models\Auftragsvorlage;
 use Hwkdo\IntranetAppBestellungen\Models\Auftragszeile;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
@@ -14,6 +16,10 @@ use Illuminate\Support\Collection;
 
 class AuftragsschreibenDaten
 {
+    public function __construct(
+        private readonly AuftragsvorlageRenderer $renderer,
+    ) {}
+
     /**
      * Platzhalter für das Auftragsschreiben. Die Anschrift entspricht der Auflösung im Bestellschein.
      *
@@ -24,6 +30,8 @@ class AuftragsschreibenDaten
      *     bezug: string,
      *     betreff: string,
      *     anrede: string,
+     *     anredeAutomatisch: bool,
+     *     brieftext: string,
      *     angebotswert: string,
      *     mehrereAngebote: bool,
      *     frist: string,
@@ -53,6 +61,11 @@ class AuftragsschreibenDaten
         $person = $bestellung->besteller ?? $bestellung->user;
         $brutto = $this->bruttoSumme($positionen);
         $mehrere = $positionen->count() > 1;
+        $vorlage = $this->vorlageFuer($bestellung);
+        $angebotswert = $brutto === null ? '–' : $this->euro($brutto);
+        $anredeSatz = $this->anredeSatz($anrede, $ansprechpartner);
+        $betreff = $this->text($bestellung->betreff) ?? '';
+        $frist = $bestellung->ausfuehrungsfrist?->format('d.m.Y') ?? '–';
 
         return [
             'empfaengerZeilen' => $this->empfaengerZeilen($lieferant, $anrede, $ansprechpartner),
@@ -61,11 +74,13 @@ class AuftragsschreibenDaten
                 : $this->text($bestellung->auftragnehmer_email),
             'datum' => ($bestellung->bestellt_at ?? now())->locale('de')->translatedFormat('j. F Y'),
             'bezug' => $this->bezugszeile($positionen),
-            'betreff' => $this->text($bestellung->betreff) ?? '',
-            'anrede' => $this->anredeSatz($anrede, $ansprechpartner),
-            'angebotswert' => $brutto === null ? '–' : $this->euro($brutto),
+            'betreff' => $betreff,
+            'anrede' => $anredeSatz,
+            'anredeAutomatisch' => $vorlage?->anrede_automatisch ?? true,
+            'brieftext' => $this->brieftext($bestellung, $vorlage, $anredeSatz, $betreff, $angebotswert, $mehrere, $frist),
+            'angebotswert' => $angebotswert,
             'mehrereAngebote' => $mehrere,
-            'frist' => $bestellung->ausfuehrungsfrist?->format('d.m.Y') ?? '–',
+            'frist' => $frist,
             'zeichen' => $person instanceof User ? mb_strtoupper($person->initials()) : '',
             'ansprechpartnerName' => $this->personenName($person),
             'telefon' => $person instanceof User ? $this->text($person->telefon) : null,
@@ -128,9 +143,16 @@ class AuftragsschreibenDaten
         $bestellung->loadMissing('auftragszeilen.angebot');
 
         $fehlend = [];
+        $vorlage = $this->vorlageFuer($bestellung);
 
-        if ($bestellung->ausfuehrungsfrist === null) {
-            $fehlend[] = 'Ausführungsfrist';
+        if ($vorlage?->verwendet(AuftragsvorlageVariable::Ausfuehrungsfrist) && $bestellung->ausfuehrungsfrist === null) {
+            $fehlend[] = AuftragsvorlageVariable::Ausfuehrungsfrist->pflichtLabel();
+        }
+
+        $vorlageWerte = is_array($bestellung->vorlage_werte) ? $bestellung->vorlage_werte : [];
+
+        if ($vorlage?->verwendet(AuftragsvorlageVariable::Freitext) && ! filled($vorlageWerte['freitext'] ?? null)) {
+            $fehlend[] = AuftragsvorlageVariable::Freitext->pflichtLabel();
         }
 
         if (! filled($bestellung->betreff)) {
@@ -151,7 +173,101 @@ class AuftragsschreibenDaten
             $fehlend[] = 'Anschrift des Auftragnehmers';
         }
 
-        return $fehlend;
+        return array_values(array_filter($fehlend, static fn (?string $eintrag): bool => filled($eintrag)));
+    }
+
+    public function vorlageFuer(Bestellung $bestellung): ?Auftragsvorlage
+    {
+        $bestellung->loadMissing('auftragsvorlage');
+
+        if ($bestellung->auftragsvorlage instanceof Auftragsvorlage) {
+            return $bestellung->auftragsvorlage;
+        }
+
+        if (! $bestellung->nutztAuftragsvorlage()) {
+            return null;
+        }
+
+        return Auftragsvorlage::query()->where('schluessel', 'hausverwaltung')->first();
+    }
+
+    public function brieftextEinfrieren(Bestellung $bestellung): void
+    {
+        if (! $bestellung->nutztAuftragsvorlage()) {
+            return;
+        }
+
+        $vorlage = $this->vorlageFuer($bestellung);
+        if (! $vorlage instanceof Auftragsvorlage) {
+            return;
+        }
+
+        $daten = $this->fuer($bestellung);
+        $html = $this->renderer->html($vorlage, $this->platzhalterWerte(
+            $daten['anrede'],
+            $daten['betreff'],
+            $daten['angebotswert'],
+            $daten['mehrereAngebote'],
+            $daten['frist'],
+            $this->freitext($bestellung),
+        ));
+
+        $bestellung->forceFill(['auftragsschreiben_inhalt' => $html])->save();
+    }
+
+    private function brieftext(
+        Bestellung $bestellung,
+        ?Auftragsvorlage $vorlage,
+        string $anredeSatz,
+        string $betreff,
+        string $angebotswert,
+        bool $mehrere,
+        string $frist,
+    ): string {
+        if (filled($bestellung->auftragsschreiben_inhalt)) {
+            return (string) $bestellung->auftragsschreiben_inhalt;
+        }
+
+        if (! $vorlage instanceof Auftragsvorlage) {
+            return '';
+        }
+
+        return $this->renderer->html($vorlage, $this->platzhalterWerte(
+            $anredeSatz,
+            $betreff,
+            $angebotswert,
+            $mehrere,
+            $frist,
+            $this->freitext($bestellung),
+        ));
+    }
+
+    private function freitext(Bestellung $bestellung): string
+    {
+        $werte = is_array($bestellung->vorlage_werte) ? $bestellung->vorlage_werte : [];
+
+        return $this->text($werte['freitext'] ?? null) ?? '';
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function platzhalterWerte(
+        string $anrede,
+        string $betreff,
+        string $angebotswert,
+        bool $mehrere,
+        string $frist,
+        string $freitext,
+    ): array {
+        return [
+            'anrede' => $anrede,
+            'betreff' => $betreff !== '' ? $betreff : '–',
+            'angebotswert' => $angebotswert,
+            'angebot_bezug' => $mehrere ? 'Ihren oben genannten Angeboten' : 'Ihrem oben genannten Angebot',
+            'frist' => $frist,
+            'freitext' => $freitext,
+        ];
     }
 
     /**
