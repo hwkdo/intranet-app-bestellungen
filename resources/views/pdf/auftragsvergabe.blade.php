@@ -12,7 +12,7 @@
 
 @php
     /** @var \Hwkdo\IntranetAppBestellungen\Models\Bestellung $bestellung */
-    $auftraggeber = $bestellung->besteller ?? $bestellung->user;
+    $auftraggeber = $bestellung->unterzeichner ?? $bestellung->besteller ?? $bestellung->user;
     $auftragsdatum = optional($bestellung->bestellt_at ?? $bestellung->created_at)->format('d.m.Y');
     $zeilen = $bestellung->auftragszeilen;
     $summeNetto = (float) $zeilen->sum(fn ($zeile): float => (float) $zeile->betrag_netto);
@@ -134,7 +134,11 @@
         </td>
         <td>
             <div>Unterschrift Auftraggeber</div>
-            <div class="sign-line"></div>
+            <div class="sign-line">
+                @if (! empty($unterschriftDataUri))
+                    <img src="{{ $unterschriftDataUri }}" alt="Unterschrift" style="display:block;height:14mm;width:auto;max-width:55mm;">
+                @endif
+            </div>
             <strong>{{ $name }}</strong><br>
             @if (filled($auftraggeber?->title))
                 {{ $auftraggeber->title }}<br>

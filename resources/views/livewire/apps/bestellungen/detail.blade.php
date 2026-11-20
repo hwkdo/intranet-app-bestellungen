@@ -85,7 +85,13 @@
                             </flux:button>
                         @endif
                         @if ($this->kannBestellen())
-                            @if ($bestellung->istIntern())
+                            @if ($bestellung->istAuftragsvergabe() && ! $bestellung->istUnterschrieben())
+                                <flux:tooltip content="Der Auftragsschein muss vor dem Bestellen unterschrieben werden.">
+                                    <flux:button size="sm" variant="primary" icon="paper-airplane" disabled>
+                                        Bestellen
+                                    </flux:button>
+                                </flux:tooltip>
+                            @elseif ($bestellung->istIntern())
                                 <flux:button size="sm" variant="primary" icon="paper-airplane" wire:click="bestellen">
                                     Bestellen
                                 </flux:button>
@@ -97,6 +103,10 @@
                         @endif
                     </div>
                 </div>
+
+                @if ($bestellung->istAuftragsvergabe() && $bestellung->status === \Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus::Freigegeben)
+                    @include('intranet-app-bestellungen::livewire.apps.bestellungen.partials.unterschrift')
+                @endif
 
                 @if ($bestellung->kassenbon)
                     <section class="glass-card overflow-hidden p-5 mb-4 space-y-3">
@@ -736,6 +746,9 @@
             <form wire:submit="freigeben" class="space-y-4">
                 <flux:heading size="lg">Bestellung freigeben</flux:heading>
                 <flux:text>{{ $bestellung->nummer }} – {{ number_format((float) $bestellung->gesamtbetrag, 2, ',', '.') }} €</flux:text>
+                @if ($this->freigabeIstLetzteUnterschrift())
+                    @include('intranet-app-bestellungen::livewire.apps.bestellungen.partials.unterschrift-hinweis')
+                @endif
                 <flux:textarea wire:model="freigabeNachricht" label="Optionale Nachricht" rows="2" />
                 <div class="flex justify-end gap-2">
                     <flux:modal.close>
@@ -750,6 +763,9 @@
             <form wire:submit="einreichen" class="space-y-4">
                 <flux:heading size="lg">Zur Freigabe einreichen</flux:heading>
                 <flux:text>{{ $bestellung->nummer }} – {{ number_format((float) $bestellung->gesamtbetrag, 2, ',', '.') }} €</flux:text>
+                @if ($this->einreichenUnterschreibt())
+                    @include('intranet-app-bestellungen::livewire.apps.bestellungen.partials.unterschrift-hinweis')
+                @else
                 <flux:field>
                     <flux:label>Freigeber auswählen</flux:label>
                     <flux:select
@@ -776,6 +792,7 @@
                             </ul>
                         </flux:callout.text>
                     </flux:callout>
+                @endif
                 @endif
                 <div class="flex justify-end gap-2">
                     <flux:modal.close>

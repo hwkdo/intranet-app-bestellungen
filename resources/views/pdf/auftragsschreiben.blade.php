@@ -126,7 +126,16 @@
         }
 
         .signatur {
-            margin: 40pt 0 22pt;
+            margin: 8pt 0 22pt;
+            min-height: 40pt;
+        }
+
+        .signatur img {
+            display: block;
+            height: 16mm;
+            width: auto;
+            max-width: 55mm;
+            margin-bottom: 2mm;
         }
 
         .anlage {
@@ -196,6 +205,9 @@
             <p>Mit freundlichen Grüßen</p>
 
             <div class="signatur">
+                @if (filled($schreiben['unterschriftDataUri'] ?? null))
+                    <img src="{{ $schreiben['unterschriftDataUri'] }}" alt="Unterschrift">
+                @endif
                 @if ($schreiben['unterzeichnerName'] !== '')
                     <div>{{ $schreiben['unterzeichnerName'] }}</div>
                 @endif

@@ -177,6 +177,6 @@
 
         .sign-line {
             border-bottom: 0.6pt solid #000;
-            height: 28pt;
+            min-height: 18mm;
             margin-bottom: 3pt;
         }

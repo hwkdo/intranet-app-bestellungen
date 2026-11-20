@@ -178,11 +178,21 @@ class BestellungWorkflow
 
         $this->ensureAuftragszeilenVollstaendig($bestellung);
 
+        if ($bestellung->istAuftragsvergabe() && ! $bestellung->istUnterschrieben()) {
+            $bestellung->loadMissing('unterzeichner');
+            $name = $bestellung->unterzeichner?->name;
+            $wer = filled($name) ? $name : 'den Unterzeichner';
+
+            throw new WorkflowException('Der Auftragsschein muss vor dem Bestellen unterschrieben werden (digital durch '.$wer.' oder als Scan).');
+        }
+
         if ($bestellung->nutztAuftragsvorlage() && $this->auftragsschreibenDaten->vorlageFuer($bestellung) === null) {
             throw new WorkflowException('Für den Auftragsschein ist keine Vorlage gewählt.');
         }
 
-        $this->auftragsschreibenDaten->brieftextEinfrieren($bestellung);
+        if (! filled($bestellung->auftragsschreiben_inhalt)) {
+            $this->auftragsschreibenDaten->brieftextEinfrieren($bestellung);
+        }
 
         if (! IntranetAppBestellungenSettings::resolvedAppSettings()->autoPushBeiBestellt) {
             return DB::transaction(function () use ($bestellung, $user, $nachricht): Bestellung {
@@ -353,6 +363,10 @@ class BestellungWorkflow
         $result = DB::transaction(function () use ($bestellung, $user, $neuerStatus, $aktion, $nachricht): Bestellung {
             $vorherStatus = $bestellung->status?->value;
 
+            if ($neuerStatus === BestellungStatus::Freigegeben) {
+                $bestellung->unterzeichner_id = $user->getKey();
+            }
+
             $bestellung->status = $neuerStatus;
             $bestellung->save();
 
@@ -365,7 +379,14 @@ class BestellungWorkflow
                 'nachricht' => $nachricht,
             ]);
 
-            return $bestellung->refresh();
+            $fresh = $bestellung->refresh();
+
+            if ($neuerStatus === BestellungStatus::Freigegeben && $fresh->istAuftragsvergabe()) {
+                app(AuftragsscheinUnterschriftService::class)->beiFreigabe($fresh, $user);
+                $fresh = $fresh->refresh();
+            }
+
+            return $fresh;
         });
 
         if ($neuerStatus === BestellungStatus::Freigegeben) {

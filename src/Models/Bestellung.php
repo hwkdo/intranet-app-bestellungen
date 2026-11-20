@@ -10,6 +10,7 @@ use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\AuftragModus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
+use Hwkdo\IntranetAppBestellungen\Enums\UnterschriftArt;
 use Hwkdo\IntranetAppBestellungen\Services\WertgrenzenService;
 use Hwkdo\IntranetAppBestellungen\Support\PlatzhalterLieferant;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -57,6 +58,8 @@ class Bestellung extends Model
             'status' => BestellungStatus::class,
             'typ' => BestellungTyp::class,
             'auftrag_modus' => AuftragModus::class,
+            'unterschrift_art' => UnterschriftArt::class,
+            'unterschrieben_at' => 'datetime',
             'vorlage_werte' => 'array',
             'ausfuehrungsfrist' => 'date',
             'kontierung' => 'array',
@@ -251,6 +254,21 @@ class Bestellung extends Model
     public function auftragsvorlage(): BelongsTo
     {
         return $this->belongsTo(Auftragsvorlage::class, 'auftragsvorlage_id');
+    }
+
+    public function unterzeichner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'unterzeichner_id');
+    }
+
+    public function unterschriftScanVon(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'unterschrift_scan_von_id');
+    }
+
+    public function istUnterschrieben(): bool
+    {
+        return $this->unterschrift_art !== null;
     }
 
     public function kassenbon(): HasOne

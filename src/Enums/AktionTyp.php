@@ -28,6 +28,9 @@ enum AktionTyp: string
     case AuftragszeileEntfernt = 'auftragszeile_entfernt';
     case NachtraeglichErfasst = 'nachtraeglich_erfasst';
     case Geloescht = 'geloescht';
+    case Unterschrieben = 'unterschrieben';
+    case UnterschriftScanHochgeladen = 'unterschrift_scan_hochgeladen';
+    case UnterschriftScanEntfernt = 'unterschrift_scan_entfernt';
 
     public function label(): string
     {
@@ -54,6 +57,9 @@ enum AktionTyp: string
             self::AuftragszeileEntfernt => 'Auftragszeile entfernt',
             self::NachtraeglichErfasst => 'Nachträgliche Bestellung erfasst',
             self::Geloescht => 'Gelöscht',
+            self::Unterschrieben => 'Digital unterschrieben',
+            self::UnterschriftScanHochgeladen => 'Unterschriebener Scan hochgeladen',
+            self::UnterschriftScanEntfernt => 'Unterschriebenen Scan entfernt',
         };
     }
 }

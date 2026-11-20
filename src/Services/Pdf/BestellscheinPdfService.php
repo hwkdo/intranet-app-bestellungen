@@ -6,6 +6,7 @@ namespace Hwkdo\IntranetAppBestellungen\Services\Pdf;
 
 use App\Services\PdfService;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
+use Hwkdo\IntranetAppBestellungen\Enums\UnterschriftArt;
 use Hwkdo\IntranetAppBestellungen\Exceptions\AuftragsscheinUnvollstaendigException;
 use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
@@ -23,7 +24,7 @@ class BestellscheinPdfService
 
     public function html(Bestellung $bestellung, BestellungTyp $typ = BestellungTyp::Intern): string
     {
-        $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'lieferanschriftUser', 'aktionen.user', 'auftragszeilen', 'kassenbon']);
+        $bestellung->loadMissing(['positionen.art', 'user', 'besteller', 'unterzeichner', 'lieferanschriftUser', 'aktionen.user', 'auftragszeilen', 'kassenbon']);
 
         if ($typ === BestellungTyp::Auftragsvergabe && $bestellung->nutztAuftragsvorlage()) {
             return View::make('intranet-app-bestellungen::pdf.auftragsschreiben', [
@@ -49,12 +50,13 @@ class BestellscheinPdfService
      */
     public function sharedViewData(Bestellung $bestellung): array
     {
-        $bestellung->loadMissing(['user', 'besteller', 'lieferanschriftUser']);
+        $bestellung->loadMissing(['user', 'besteller', 'unterzeichner', 'lieferanschriftUser']);
 
         return [
             'bestellung' => $bestellung,
             'lieferant' => $this->resolveLieferant($bestellung),
             'logoDataUri' => $this->logoDataUri(),
+            'unterschriftDataUri' => $this->auftragsschreibenDaten->unterschriftDataUri($bestellung),
         ];
     }
 
@@ -140,10 +142,7 @@ class BestellscheinPdfService
         File::ensureDirectoryExists($tmpDir);
 
         $baseFilename = $this->makeFilename($bestellung);
-
-        // Gotenberg::save() liefert den tatsächlich gespeicherten Dateinamen zurück.
-        $savedFilename = $this->pdfService->saveFromHtml($this->html($bestellung, $typ), $tmpDir, $baseFilename);
-        $basePath = $tmpDir.'/'.$savedFilename;
+        $basePath = $this->basisPfad($bestellung, $typ, $tmpDir, $baseFilename);
 
         if (! File::exists($basePath)) {
             throw new \RuntimeException(sprintf(
@@ -167,6 +166,26 @@ class BestellscheinPdfService
             $tmpDir,
             'merged-'.$baseFilename,
         );
+    }
+
+    private function basisPfad(Bestellung $bestellung, BestellungTyp $typ, string $tmpDir, string $baseFilename): string
+    {
+        if (
+            $typ === BestellungTyp::Auftragsvergabe
+            && $bestellung->unterschrift_art === UnterschriftArt::Scan
+            && filled($bestellung->unterschrift_scan_pfad)
+            && Storage::disk('local')->exists($bestellung->unterschrift_scan_pfad)
+        ) {
+            return Storage::disk('local')->path($bestellung->unterschrift_scan_pfad);
+        }
+
+        if ($typ === BestellungTyp::Auftragsvergabe && $bestellung->unterschrift_art === UnterschriftArt::Scan) {
+            throw new \RuntimeException('Der unterschriebene Scan des Auftragsscheins fehlt.');
+        }
+
+        $savedFilename = $this->pdfService->saveFromHtml($this->html($bestellung, $typ), $tmpDir, $baseFilename);
+
+        return $tmpDir.'/'.$savedFilename;
     }
 
     public function inline(Bestellung $bestellung, BestellungTyp $typ = BestellungTyp::Intern): Response

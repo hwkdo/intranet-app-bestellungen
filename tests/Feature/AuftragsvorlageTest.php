@@ -8,6 +8,7 @@ use Hwkdo\IntranetAppBestellungen\Data\AppSettings;
 use Hwkdo\IntranetAppBestellungen\Enums\AuftragModus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
+use Hwkdo\IntranetAppBestellungen\Enums\UnterschriftArt;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Admin\AuftragsvorlagenEditor;
 use Hwkdo\IntranetAppBestellungen\Livewire\Apps\Bestellungen\Detail;
@@ -91,6 +92,11 @@ it('friert den Brieftext beim Bestellen ein', function (): void {
     $user = User::factory()->create();
     $user->assignRole('Benutzer');
     $bestellung = vorlagenBestellung($user, 'hausverwaltung', BestellungStatus::Freigegeben);
+    $bestellung->forceFill([
+        'unterzeichner_id' => $user->id,
+        'unterschrift_art' => UnterschriftArt::Digital,
+        'unterschrieben_at' => now(),
+    ])->save();
 
     app(BestellungWorkflow::class)->bestellen($bestellung->fresh(), $user);
 

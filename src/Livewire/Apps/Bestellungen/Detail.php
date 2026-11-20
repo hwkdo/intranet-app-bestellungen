@@ -8,12 +8,14 @@ use App\Models\User;
 use Flux\Flux;
 use Hwkdo\D3RestLaravel\Client as D3Client;
 use Hwkdo\D3RestLaravel\Enums\DocTypeEnum;
+use Hwkdo\IntranetAppBase\Services\UserSignatureStore;
 use Hwkdo\IntranetAppBestellungen\Data\AngebotsregelAuswertung;
 use Hwkdo\IntranetAppBestellungen\Enums\AktionTyp;
 use Hwkdo\IntranetAppBestellungen\Enums\AuftragModus;
 use Hwkdo\IntranetAppBestellungen\Enums\AuftragsvorlageVariable;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungStatus;
 use Hwkdo\IntranetAppBestellungen\Enums\BestellungTyp;
+use Hwkdo\IntranetAppBestellungen\Enums\UnterschriftArt;
 use Hwkdo\IntranetAppBestellungen\Exceptions\WorkflowException;
 use Hwkdo\IntranetAppBestellungen\Http\Requests\MeldeFehlendenLieferantRequest;
 use Hwkdo\IntranetAppBestellungen\Jobs\ExtractAngebotMetadataJob;
@@ -26,6 +28,7 @@ use Hwkdo\IntranetAppBestellungen\Models\Notiz;
 use Hwkdo\IntranetAppBestellungen\Models\Position;
 use Hwkdo\IntranetAppBestellungen\Services\AngebotsregelService;
 use Hwkdo\IntranetAppBestellungen\Services\Api\BestellungAngebotUploadService;
+use Hwkdo\IntranetAppBestellungen\Services\AuftragsscheinUnterschriftService;
 use Hwkdo\IntranetAppBestellungen\Services\AuftragszeilenService;
 use Hwkdo\IntranetAppBestellungen\Services\BenNumberService;
 use Hwkdo\IntranetAppBestellungen\Services\BestellungWorkflow;
@@ -119,6 +122,8 @@ class Detail extends Component
 
     public $angebotPdf = null;
 
+    public $unterschriftScan = null;
+
     public ?string $bestellenLieferantennummer = null;
 
     public string $bestellenLieferantSearch = '';
@@ -188,7 +193,7 @@ class Detail extends Component
     public function mount(Bestellung $bestellung): void
     {
         $this->bestellung = $bestellung->load([
-            'user', 'freigeber', 'besteller', 'internerEmpfaenger',
+            'user', 'freigeber', 'besteller', 'unterzeichner', 'unterschriftScanVon', 'internerEmpfaenger',
             'positionen.art', 'positionen.media', 'angebote.user', 'angebote.auftragszeile',
             'auftragszeilen.angebot', 'auftragsvorlage', 'notizen.user', 'aktionen.user', 'projekt',
         ]);
@@ -481,6 +486,130 @@ class Detail extends Component
         return app(AngebotsregelService::class)->auswertung($this->bestellung);
     }
 
+    public function digitalUnterschreiben(): void
+    {
+        $user = Auth::user();
+        if ($user === null) {
+            return;
+        }
+
+        try {
+            app(AuftragsscheinUnterschriftService::class)->digitalUnterschreiben($this->bestellung, $user);
+            $this->refreshBestellung();
+            Flux::toast(heading: 'Unterschrieben', text: 'Der Auftragsschein wurde mit Ihrer registrierten Unterschrift unterschrieben.', variant: 'success');
+        } catch (WorkflowException $e) {
+            Flux::toast(heading: 'Unterschrift', text: $e->getMessage(), variant: 'error');
+        }
+    }
+
+    public function unterschriftScanHochladen(): void
+    {
+        $user = Auth::user();
+        if ($user === null) {
+            return;
+        }
+
+        $this->validate([
+            'unterschriftScan' => ['required', 'file', 'mimes:pdf', 'max:20480'],
+        ], [
+            'unterschriftScan.required' => 'Bitte wählen Sie den unterschriebenen Scan.',
+            'unterschriftScan.mimes' => 'Der Scan muss eine PDF-Datei sein.',
+            'unterschriftScan.max' => 'Der Scan darf höchstens 20 MB groß sein.',
+        ]);
+
+        try {
+            app(AuftragsscheinUnterschriftService::class)->scanHochladen($this->bestellung, $user, $this->unterschriftScan);
+            $this->reset('unterschriftScan');
+            $this->refreshBestellung();
+            Flux::toast(heading: 'Scan gespeichert', text: 'Der unterschriebene Auftragsschein ersetzt das generierte Anschreiben.', variant: 'success');
+        } catch (WorkflowException $e) {
+            Flux::toast(heading: 'Scan', text: $e->getMessage(), variant: 'error');
+        }
+    }
+
+    public function unterschriftScanEntfernen(): void
+    {
+        $user = Auth::user();
+        if ($user === null) {
+            return;
+        }
+
+        try {
+            app(AuftragsscheinUnterschriftService::class)->scanEntfernen($this->bestellung, $user);
+            $this->refreshBestellung();
+            Flux::toast(text: 'Der Scan wurde entfernt.', variant: 'success');
+        } catch (WorkflowException $e) {
+            Flux::toast(heading: 'Scan', text: $e->getMessage(), variant: 'error');
+        }
+    }
+
+    public function freigabeIstLetzteUnterschrift(): bool
+    {
+        if (! $this->bestellung->istAuftragsvergabe()) {
+            return false;
+        }
+
+        if ($this->bestellung->status === BestellungStatus::ZurZweitenFreigabe) {
+            return true;
+        }
+
+        if ($this->bestellung->status !== BestellungStatus::ZurFreigabe) {
+            return false;
+        }
+
+        return ! app(WertgrenzenService::class)->zweiteFreigabeNoetig((float) $this->bestellung->gesamtbetrag);
+    }
+
+    public function einreichenUnterschreibt(): bool
+    {
+        return $this->bestellung->istAuftragsvergabe()
+            && $this->bestellung->status === BestellungStatus::Entwurf
+            && app(WertgrenzenService::class)->istFreigeber1NichtNoetig($this->bestellung);
+    }
+
+    public function darfScanHochladen(): bool
+    {
+        $user = Auth::user();
+        if ($user === null || $this->bestellung->status !== BestellungStatus::Freigegeben || ! $this->bestellung->istAuftragsvergabe()) {
+            return false;
+        }
+
+        if ($this->bestellung->unterschrift_art === UnterschriftArt::Digital) {
+            return false;
+        }
+
+        return (int) $this->bestellung->unterzeichner_id === (int) $user->getKey()
+            || $this->bestellung->darfVonUserBestelltAbschliessen($user);
+    }
+
+    public function darfDigitalUnterschreiben(): bool
+    {
+        $user = Auth::user();
+
+        return $user !== null
+            && $this->bestellung->istAuftragsvergabe()
+            && $this->bestellung->status === BestellungStatus::Freigegeben
+            && $this->bestellung->unterschrift_art === null
+            && (int) $this->bestellung->unterzeichner_id === (int) $user->getKey()
+            && app(UserSignatureStore::class)->active($user) !== null;
+    }
+
+    #[Computed]
+    public function eigeneUnterschriftDataUri(): ?string
+    {
+        $user = Auth::user();
+        if ($user === null) {
+            return null;
+        }
+
+        $signature = app(UserSignatureStore::class)->active($user);
+        if ($signature === null) {
+            return null;
+        }
+
+        return app(UserSignatureStore::class)->dataUri($signature);
+    }
+
     public function freigeben(): void
     {
         if (! $this->kannFreigeben()) {
@@ -636,6 +765,12 @@ class Detail extends Component
         }
 
         if (app(WertgrenzenService::class)->istFreigeber1NichtNoetig($this->bestellung)) {
+            if ($this->bestellung->istAuftragsvergabe()) {
+                Flux::modal('einreichen-modal')->show();
+
+                return;
+            }
+
             $this->einreichen();
 
             return;
@@ -858,6 +993,12 @@ class Detail extends Component
             $kopie->besteller_id = null;
             $kopie->ausfuehrungsfrist = null;
             $kopie->auftragsschreiben_inhalt = null;
+            $kopie->unterzeichner_id = null;
+            $kopie->unterschrift_art = null;
+            $kopie->unterschrieben_at = null;
+            $kopie->unterschrift_bild_pfad = null;
+            $kopie->unterschrift_scan_pfad = null;
+            $kopie->unterschrift_scan_von_id = null;
             $kopie->d3id = null;
             $kopie->d3_pushed_at = null;
             $kopie->bestellt_at = null;
@@ -1974,7 +2115,7 @@ class Detail extends Component
     private function refreshBestellung(): void
     {
         $this->bestellung = $this->bestellung->fresh([
-            'user', 'freigeber', 'besteller', 'internerEmpfaenger',
+            'user', 'freigeber', 'besteller', 'unterzeichner', 'unterschriftScanVon', 'internerEmpfaenger',
             'positionen.art', 'positionen.media', 'angebote.user', 'angebote.auftragszeile',
             'auftragszeilen.angebot', 'auftragsvorlage', 'notizen.user', 'aktionen.user', 'projekt',
         ]);

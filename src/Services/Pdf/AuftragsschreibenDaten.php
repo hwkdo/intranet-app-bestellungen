@@ -6,6 +6,7 @@ namespace Hwkdo\IntranetAppBestellungen\Services\Pdf;
 
 use App\Models\User;
 use Hwkdo\IntranetAppBestellungen\Enums\AuftragsvorlageVariable;
+use Hwkdo\IntranetAppBestellungen\Enums\UnterschriftArt;
 use Hwkdo\IntranetAppBestellungen\Models\Angebot;
 use Hwkdo\IntranetAppBestellungen\Models\Auftragsvorlage;
 use Hwkdo\IntranetAppBestellungen\Models\Auftragszeile;
@@ -13,6 +14,7 @@ use Hwkdo\IntranetAppBestellungen\Models\Bestellung;
 use Hwkdo\IntranetAppBestellungen\Models\LieferantCache;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 
 class AuftragsschreibenDaten
 {
@@ -47,7 +49,7 @@ class AuftragsschreibenDaten
      */
     public function fuer(Bestellung $bestellung): array
     {
-        $bestellung->loadMissing(['auftragszeilen.angebot', 'besteller', 'user']);
+        $bestellung->loadMissing(['auftragszeilen.angebot', 'besteller', 'user', 'unterzeichner']);
 
         $positionen = $this->positionen($bestellung);
         $lieferant = $this->lieferant($bestellung);
@@ -59,6 +61,7 @@ class AuftragsschreibenDaten
             ? $kontakt['ansprechpartner']
             : $this->text($bestellung->auftragnehmer_ansprechpartner);
         $person = $bestellung->besteller ?? $bestellung->user;
+        $unterzeichner = $bestellung->unterzeichner ?? $person;
         $brutto = $this->bruttoSumme($positionen);
         $mehrere = $positionen->count() > 1;
         $vorlage = $this->vorlageFuer($bestellung);
@@ -86,8 +89,9 @@ class AuftragsschreibenDaten
             'telefon' => $person instanceof User ? $this->text($person->telefon) : null,
             'telefax' => $person instanceof User ? $this->text($person->fax) : null,
             'email' => $person instanceof User ? $this->text($person->email) : null,
-            'unterzeichnerName' => $this->personenName($person),
-            'funktion' => $person instanceof User ? $this->text($person->title) : null,
+            'unterzeichnerName' => $this->personenName($unterzeichner),
+            'funktion' => $unterzeichner instanceof User ? $this->text($unterzeichner->title) : null,
+            'unterschriftDataUri' => $this->unterschriftDataUri($bestellung),
             'anlage' => $mehrere ? 'Angebote' : 'Angebot',
         ];
     }
@@ -189,6 +193,24 @@ class AuftragsschreibenDaten
         }
 
         return Auftragsvorlage::query()->where('schluessel', 'hausverwaltung')->first();
+    }
+
+    public function unterschriftDataUri(Bestellung $bestellung): ?string
+    {
+        if ($bestellung->unterschrift_art !== UnterschriftArt::Digital || ! filled($bestellung->unterschrift_bild_pfad)) {
+            return null;
+        }
+
+        if (! Storage::disk('local')->exists($bestellung->unterschrift_bild_pfad)) {
+            return null;
+        }
+
+        $bytes = Storage::disk('local')->get($bestellung->unterschrift_bild_pfad);
+        if (! is_string($bytes) || $bytes === '') {
+            return null;
+        }
+
+        return 'data:image/png;base64,'.base64_encode($bytes);
     }
 
     public function brieftextEinfrieren(Bestellung $bestellung): void
